@@ -84,7 +84,9 @@ View(aggregated_relationship_data)
 ########### 2 DatenHaushalt
 # Lese den Datensatz ein
 daten_haushalt <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_haushalt.sav", to.data.frame = TRUE)
-View(daten_haushalt)
+
+str(daten_haushalt)
+
 # Umbenennen der Variablen
 daten_haushalt <- daten_haushalt %>%
   rename(
@@ -160,32 +162,96 @@ daten_haushalt <- daten_haushalt %>%
     Household_Interview_Month = m_intmonth_hh
   )
 
-# Überprüfung aller Variablen auf NA-Werte und Anwendung einer generellen Behandlung für numerische Variablen
+
+# Variablen, die entfernt werden sollen
+unwanted_vars <- c(
+  "Tranche", 
+  "Point_Number_Drawn", 
+  "Interviewer_Number_Final_Outcome", 
+  "Phone_Number_Found", 
+  "New_Phone_Number", 
+  "New_Email_Address", 
+  "New_Address", 
+  "Valid_Cases_Realized", 
+  "First_Reminder_Sent", 
+  "Second_Reminder_Sent", 
+  "Conversion_Letter_Sent", 
+  "Pre_Contact_CATI"
+)
+
+# Entfernen der weniger relevanten Variablen
 daten_haushalt <- daten_haushalt %>%
-  mutate(across(where(is.numeric), ~ifelse(is.na(.x), mean(.x, na.rm = TRUE), .x))) %>%
-  mutate(across(where(is.character), ~fct_explicit_na(.x, na_level = "Unbekannt")))
+  select(-all_of(unwanted_vars))
 
-# Überprüfung auf fehlende Daten und weitere Aufbereitung
 daten_haushalt <- daten_haushalt %>%
-  drop_na()  # Entfernen aller Zeilen, die noch NA enthalten
-defeffr
+  mutate(Birth_Year = as.character(Birth_Year),  # Ensure Birth_Year is character for replacement
+         Birth_Year = ifelse(Birth_Year == "keine Angabe", NA, Birth_Year),
+         Birth_Year = as.numeric(Birth_Year))  # Convert to numeric safely
+
+daten_haushalt <- daten_haushalt %>%
+  mutate(Age = ifelse(!is.na(Birth_Year),
+                      as.numeric(format(Sys.Date(), "%Y")) - Birth_Year,
+                      NA_real_))  # Handle NA to prevent NAs from coercion
+
+
+
+
+# data transformation
+daten_haushalt <- daten_haushalt %>%
+  # Umwandlung aller kategorialen Variablen in Faktoren mit einer spezifischen NA-Behandlung
+  mutate(across(where(is.factor), ~ fct_explicit_na(.x, na_level = "Unbekannt"))) %>%
+  # Spezifische NA-Behandlungen für numerische Variablen
+  mutate(
+    Monthly_Saving = ifelse(is.na(Monthly_Saving), median(as.numeric(as.character(Monthly_Saving)), na.rm = TRUE), Monthly_Saving),
+    Number_of_Children_Rooms = ifelse(is.na(Number_of_Children_Rooms), 0, Number_of_Children_Rooms),
+    Household_Net_Income = ifelse(is.na(Household_Net_Income), mean(as.numeric(as.character(Household_Net_Income)), na.rm = TRUE), Household_Net_Income),
+    Number_of_People_in_Household = ifelse(is.na(Number_of_People_in_Household), median(Number_of_People_in_Household, na.rm = TRUE), Number_of_People_in_Household),
+    External_Children = replace_na(External_Children, "nein")
+  ) %>%
+  # Filtern unplausibler Werte (Beispiel: Alter über 120 Jahre)
+  filter(as.numeric(as.character(Birth_Year)) >= 1900 & as.numeric(as.character(Birth_Year)) <= as.numeric(format(Sys.Date(), "%Y"))) %>%
+  # Transformation von Geburtsjahr in Alter
+  mutate(Age = as.numeric(format(Sys.Date(), "%Y")) - as.numeric(as.character(Birth_Year))) %>%
+  # Skalierung von numerischen Daten
+  mutate(across(where(is.numeric), ~ scale(.x))) %>%
+  # Überprüfen, dass die Anzahl der Personen im Haushalt nicht null ist
+  filter(Number_of_People_in_Household > 0) %>%
+  # Entfernen aller Zeilen, die noch NA enthalten
+  drop_na()
+
+
+daten_haushalt <- daten_haushalt %>%
+  mutate(
+    # Finanzstabilität und Ressourcen
+    Savings_Income_Ratio = Monthly_Saving / Household_Net_Income,
+    Unexpected_Expense_Coverage = ifelse(Pay_for_Unexpected_Expenses == "ja", 1, 0),
+    
+    # Soziale Unterstützung und Umfeld
+    Normalized_Social_Support = OSLO_3_Social_Support_Scale / Number_of_People_in_Household,
+    Good_Access_Public_Transport = ifelse(Distance_to_Nearest_Public_Transport <= 500, 1, 0),
+    
+    # Haushaltsstruktur und Lebensbedingungen
+    Child_Room_Ratio = Number_of_Children_Rooms / Number_of_People_in_Household,
+    Dependent_Care_Ratio = ifelse(Care_Dependent_Persons_in_Household == "ja", 1, 0) / Number_of_People_in_Household,
+    
+    # Deprivation Risk Index
+    Deprivation_Risk_Index = (1 - Savings_Income_Ratio) + (1 - Unexpected_Expense_Coverage) + (1 - Normalized_Social_Support),
+    
+  #   # Zusätzliche metrische Indikatoren
+  #   Employment_Rate = ...,  # Beschäftigungsrate der Erwachsenen im Haushalt
+  #   Nutritional_Security = ...,  # Ernährungssicherheit basierend auf Zugang zu ausgewogener Ernährung
+  #   Housing_Security = ...,  # Sicherheitsbewertung der Wohnsituation
+  #   Household_Stress_Index = ...,  # Stresslevel im Haushalt basierend auf Umfrageantworten
+  #   Social_Integration_Score = ...  # Teilnahme an gesellschaftlichen Aktivitäten
+  # 
+  )
 
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+#####################################
 # Datensätze zusammenführen
 daten <- merge(aggregated_relationship_data, daten_haushalt, by = "Matchvariable_HHLFD", all = TRUE)
 
