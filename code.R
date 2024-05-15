@@ -19,6 +19,8 @@ library(tidyverse)
 # Lese den Datensatz ein
 daten_beziehungen <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_beziehungen.sav", to.data.frame = TRUE)
 
+nrow(daten_beziehungen)
+
 # Umbenennen der Variablen
 daten_beziehungen <- daten_beziehungen %>%
   rename(
@@ -39,8 +41,12 @@ daten_beziehungen <- daten_beziehungen %>%
     Non_Household_Person2 = extern2
   )
 
+
+lookup <- c("Pair_Relationship","Pair_Relationship_ori")
+
 # Annahme, dass die Daten geladen sind und 'daten_beziehungen' zur Verfügung steht
-daten_beziehungen <- daten_beziehungen %>%
+daten_beziehungen <- daten_beziehungen%>%
+  select(-all_of(lookup))%>%
   mutate(
     # Konvertiere Faktoren zu numerischen Werten, vorausgesetzt die Werte sind gültige Zahlen
     Non_Household_Person1 = as.numeric(as.character(Non_Household_Person1)),
@@ -48,7 +54,7 @@ daten_beziehungen <- daten_beziehungen %>%
   ) %>%
   mutate(
     Same_Household = ifelse(Non_Household_Person1 == 0 & Non_Household_Person2 == 0, "Yes", "No"),
-    External_Relationship_Interaction = interaction(Non_Household_Person1, Relationship_Type),
+    #External_Relationship_Interaction = interaction(Non_Household_Person1, Relationship_Type),
     Is_Parent_Child = ifelse(
       Relationship_Type %in% c(
         "Leibliche Mutter/leiblicher Vater",
@@ -73,19 +79,14 @@ aggregated_relationship_data <- daten_beziehungen %>%
     Num_Different_Household = sum(Same_Household == "No", na.rm = TRUE),
     Num_Parent_Child_Relationships = sum(Is_Parent_Child, na.rm = TRUE),
     Num_Grandparent_Present = max(Grandparent_Present, na.rm = TRUE),
-    External_Relationships = list(unique(External_Relationship_Interaction)),
+    #External_Relationships = list(unique(External_Relationship_Interaction)),
     Num_External_Relationships = sum(Non_Household_Person1 > 0 | Non_Household_Person2 > 0, na.rm = TRUE)
   )
-
-
-View(aggregated_relationship_data)
-
 
 ########### 2 DatenHaushalt
 # Lese den Datensatz ein
 daten_haushalt <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_haushalt.sav", to.data.frame = TRUE)
-
-str(daten_haushalt)
+nrow(daten_haushalt)
 
 # Umbenennen der Variablen
 daten_haushalt <- daten_haushalt %>%
@@ -164,24 +165,44 @@ daten_haushalt <- daten_haushalt %>%
 
 
 # Variablen, die entfernt werden sollen
-unwanted_vars <- c(
-  "Tranche", 
-  "Point_Number_Drawn", 
-  "Interviewer_Number_Final_Outcome", 
-  "Phone_Number_Found", 
-  "New_Phone_Number", 
-  "New_Email_Address", 
-  "New_Address", 
-  "Valid_Cases_Realized", 
-  "First_Reminder_Sent", 
-  "Second_Reminder_Sent", 
-  "Conversion_Letter_Sent", 
-  "Pre_Contact_CATI"
-)
+unwanted_vars2 <- c("Interviewer_Filled_Silently",
+                    "Save_Address",
+                    "Address_Is_Correct",
+                    "m_hhmitzp",
+                    "BLand",
+                    "Nationality_Recoded",
+                    "Interview_Number",
+                    "CATI_Switch",
+                    "TRANCHE_hh",
+                    "Household_Fully_Interviewed",
+                    "Household_Tracking_Level",
+                    "Total_Tracking_Final_Outcome",
+                    "telja_hh",
+                    "Final_Outcome_Date",
+                    "Final_Outcome_Households",
+                    "Household_Ready_for_Panel",
+                    "Contact_Count_Household_Level",
+                    "Total_Contact_Count_Household_Level",
+                    "All_Contacts_in_Household_Incl_Person_Contact",
+                    "Household_Weight_Without_Calibration",
+                    "Calibrated_Household_Weight",
+                    "Community_ID",  "Tranche", 
+                    "Point_Number_Drawn", 
+                    "Interviewer_Number_Final_Outcome", 
+                    "Phone_Number_Found", 
+                    "New_Phone_Number", 
+                    "New_Email_Address", 
+                    "New_Address", 
+                    "Valid_Cases_Realized", 
+                    "First_Reminder_Sent", 
+                    "Second_Reminder_Sent", 
+                    "Conversion_Letter_Sent", 
+                    "Pre_Contact_CATI")
+
 
 # Entfernen der weniger relevanten Variablen
 daten_haushalt <- daten_haushalt %>%
-  select(-all_of(unwanted_vars))
+  select(-all_of(unwanted_vars2))
 
 daten_haushalt <- daten_haushalt %>%
   mutate(Birth_Year = as.character(Birth_Year),  # Ensure Birth_Year is character for replacement
@@ -193,14 +214,24 @@ daten_haushalt <- daten_haushalt %>%
                       as.numeric(format(Sys.Date(), "%Y")) - Birth_Year,
                       NA_real_))  # Handle NA to prevent NAs from coercion
 
+# Definieren Sie eine Funktion zur Imputation der numerischen Variablen
+impute_numeric <- function(x) {
+  ifelse(is.na(x), median(x, na.rm = TRUE), x)
+}
 
+# Definieren Sie eine Funktion zur Imputation der kategorialen Variablen
+impute_categorical <- function(x) {
+  ifelse(is.na(x), as.character(getmode(x)), as.character(x))
+}
 
+# Funktion zur Bestimmung des Modus
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
 
-# data transformation
 daten_haushalt <- daten_haushalt %>%
-  # Umwandlung aller kategorialen Variablen in Faktoren mit einer spezifischen NA-Behandlung
   mutate(across(where(is.factor), ~ fct_explicit_na(.x, na_level = "Unbekannt"))) %>%
-  # Spezifische NA-Behandlungen für numerische Variablen
   mutate(
     Monthly_Saving = ifelse(is.na(Monthly_Saving), median(as.numeric(as.character(Monthly_Saving)), na.rm = TRUE), Monthly_Saving),
     Number_of_Children_Rooms = ifelse(is.na(Number_of_Children_Rooms), 0, Number_of_Children_Rooms),
@@ -208,17 +239,14 @@ daten_haushalt <- daten_haushalt %>%
     Number_of_People_in_Household = ifelse(is.na(Number_of_People_in_Household), median(Number_of_People_in_Household, na.rm = TRUE), Number_of_People_in_Household),
     External_Children = replace_na(External_Children, "nein")
   ) %>%
-  # Filtern unplausibler Werte (Beispiel: Alter über 120 Jahre)
   filter(as.numeric(as.character(Birth_Year)) >= 1900 & as.numeric(as.character(Birth_Year)) <= as.numeric(format(Sys.Date(), "%Y"))) %>%
-  # Transformation von Geburtsjahr in Alter
   mutate(Age = as.numeric(format(Sys.Date(), "%Y")) - as.numeric(as.character(Birth_Year))) %>%
-  # Skalierung von numerischen Daten
-  mutate(across(where(is.numeric), ~ scale(.x))) %>%
-  # Überprüfen, dass die Anzahl der Personen im Haushalt nicht null ist
   filter(Number_of_People_in_Household > 0) %>%
-  # Entfernen aller Zeilen, die noch NA enthalten
-  drop_na()
+  mutate(across(where(is.numeric), ~ impute_numeric(.x))) %>%
+  mutate(across(where(is.factor), ~ impute_categorical(.x)))
 
+# # Überprüfen Sie, ob alle NAs beseitigt wurden
+# sapply(daten_haushalt, function(x) sum(is.na(x)))
 
 daten_haushalt <- daten_haushalt %>%
   mutate(
@@ -236,100 +264,116 @@ daten_haushalt <- daten_haushalt %>%
     
     # Deprivation Risk Index
     Deprivation_Risk_Index = (1 - Savings_Income_Ratio) + (1 - Unexpected_Expense_Coverage) + (1 - Normalized_Social_Support),
-    
-  #   # Zusätzliche metrische Indikatoren
-  #   Employment_Rate = ...,  # Beschäftigungsrate der Erwachsenen im Haushalt
-  #   Nutritional_Security = ...,  # Ernährungssicherheit basierend auf Zugang zu ausgewogener Ernährung
-  #   Housing_Security = ...,  # Sicherheitsbewertung der Wohnsituation
-  #   Household_Stress_Index = ...,  # Stresslevel im Haushalt basierend auf Umfrageantworten
-  #   Social_Integration_Score = ...  # Teilnahme an gesellschaftlichen Aktivitäten
-  # 
   )
-
-
-
-
 
 
 #####################################
 # Datensätze zusammenführen
 daten <- merge(aggregated_relationship_data, daten_haushalt, by = "Matchvariable_HHLFD", all = TRUE)
+sapply(daten, function(x) sum(is.na(x)))
 
-# Fehlende Werte für numerische und faktorbezogene Variablen imputieren
-daten <- daten %>%
-  mutate(across(where(is.numeric), ~ifelse(is.na(.), mean(., na.rm = TRUE), .))) %>%
-  mutate(across(where(is.factor), fct_explicit_na, na_level = "NA")) %>%
-  mutate(across(where(is.factor), ~fct_explicit_na(., na_level = get_mode(.))))
-
-# Deprivationsindikatoren definieren und Gesamtindex berechnen
 daten <- daten %>%
   mutate(
+    # Erstellen von Indikatoren für jede Deprivationsart
     sparen_depriviert = ifelse(Monthly_Saving == "nein, aus finanziellen Gründen nicht", 1, 0),
     moebel_depriviert = ifelse(Replace_Furniture == "nein, aus finanziellen Gründen nicht", 1, 0),
-    ausgaben_depriviert = ifelse( Pay_for_Unexpected_Expenses == "nein, aus finanziellen Gründen nicht", 1, 0),
+    ausgaben_depriviert = ifelse(Pay_for_Unexpected_Expenses == "nein, aus finanziellen Gründen nicht", 1, 0),
     alg2_depriviert = ifelse(Receipt_of_ALG_II_or_Hartz_IV == "ja", 1, 0),
-    gesamt_depriviert = sparen_depriviert + moebel_depriviert + ausgaben_depriviert + alg2_depriviert,
-    deprivation_outcome = ifelse(gesamt_depriviert >= 1, 1, 0)
+    einkommen_depriviert = ifelse(Below_60_Percent_Median_Income == "ja", 1, 0),
+    
+    # Berechnen eines Gesamtdeprivationsindex
+    gesamt_depriviert = sparen_depriviert + moebel_depriviert + ausgaben_depriviert + alg2_depriviert + einkommen_depriviert,
+    
+    # Erstellen der Deprivation Outcome Variable
+    deprivation_outcome = ifelse(gesamt_depriviert >= 3, 1, 0) # Als depriviert gilt, wer bei 3 oder mehr Kriterien betroffen ist 
   )
 
-# Daten für das Random-Forest-Modell vorbereiten
-predictors <- daten %>% select(-deprivation_outcome)
-outcome <- daten$deprivation_outcome
 
-# Überprüfen, ob jetzt zwei Klassen vorhanden sind
-if (length(unique(outcome)) < 2) {
-  print("Not enough classes for classification. Adjust the conditions.")
-} else {
-  rf_model <- randomForest(as.factor(outcome) ~ ., data = daten, ntree = 500, importance = TRUE)
-  print(rf_model)
+# Sicherstellen, dass alle kategorialen Variablen als Faktoren behandelt werden
+daten <- daten %>%
+  mutate_if(is.character, as.factor)
+
+daten <- daten %>%
+  mutate(
+    # Sozial- und Familienstruktur
+    Social_Structure_Index = Num_Parent_Child_Relationships + Num_Grandparent_Present,
+    Total_Dependents = Num_Parent_Child_Relationships + Num_Grandparent_Present,  # Addieren Sie weitere abhängige Personen, falls vorhanden
+    
+    # Wirtschaftlicher Druck
+    Economic_Strain_Index = as.integer(Monthly_Saving == "nein, aus finanziellen Gründen nicht") +
+      as.integer(Replace_Furniture == "nein, aus finanziellen Gründen nicht") +
+      as.integer(Pay_for_Unexpected_Expenses == "nein, aus finanziellen Gründen nicht"),
+    
+    Dependency_Ratio = (Num_Parent_Child_Relationships + Num_Grandparent_Present) / Number_of_People_in_Household,
+    Income_to_needs_ratio = Household_Net_Income / (Number_of_People_in_Household * Lower_Limit_Equivalent_Income),
+    # Ökonomische Indikatoren
+    Is_Receiving_ALG_II = as.integer(Receipt_of_ALG_II_or_Hartz_IV == "ja"),
+    Is_Below_Poverty_Line = as.integer(Below_60_Percent_Median_Income == "ja"),
+    
+    # Komplexerer Index könnte weitere Variablen umfassen
+    Financial_Security_Index = Economic_Strain_Index - Is_Receiving_ALG_II - Is_Below_Poverty_Line
+  )
+
+
+# Überprüfen, ob 'deprivation_outcome' als Faktor behandelt wird
+if (!is.factor(daten$deprivation_outcome)) {
+  daten$deprivation_outcome <- factor(daten$deprivation_outcome)
 }
-
-# Anzahl der Fälle in jeder Klasse ausgeben
-print(table(daten$deprivation_outcome))
-
+daten <- daten %>%
+  drop_na()
 
 
-library(caret)
-set.seed(123)  # Für reproduzierbare Ergebnisse
-# Aufteilung der Daten in 70% Training und 30% Test
-train_indices <- createDataPartition(daten$deprivation_outcome, p = 0.7, list = FALSE)
-train_data <- daten[train_indices, ]
-test_data <- daten[-train_indices, ]
+# Entfernen oder Ersetzen von NaN-Werten
+daten <- daten %>% 
+  mutate(across(where(is.numeric), ~ ifelse(is.nan(.), median(., na.rm = TRUE), .)))
+
+# Entfernen oder Ersetzen von Inf-Werten
+daten <- daten %>% 
+  mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
 
 
-rf_model_train <- randomForest(as.factor(deprivation_outcome) ~ ., data = train_data, ntree = 500)
-print(rf_model_train)
+############# Modell
+# Erneutes Ausführen des Random Forest-Modells als Klassifikationsmodell
+rf_model <- randomForest(deprivation_outcome ~ ., data = daten, ntree = 500, mtry = 2, importance = TRUE)
 
-test_predictions <- predict(rf_model_train, test_data)
-confusion_matrix <- table(test_data$deprivation_outcome, test_predictions)
-print(confusion_matrix)
-accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+# Modellzusammenfassung ausgeben
+print(rf_model)
+
+
+# Konfusionsmatrix und Genauigkeit berechnen
+confusion <- table(Predicted = predict(rf_model, daten, type = "class"), Actual = daten$deprivation_outcome)
+print(confusion)
+
+# Berechnung der Genauigkeit
+accuracy <- sum(diag(confusion)) / sum(confusion)
 print(paste("Accuracy: ", accuracy))
-importance <- importance(rf_model_train)
-varImpPlot(rf_model_train)
-library(caret)
-control <- trainControl(method = "cv", number = 10)  # 10-fache Kreuzvalidierung
-cv_model <- train(as.factor(deprivation_outcome) ~ ., data = train_data, method = "rf", 
-                  trControl = control, ntree = 500)
-print(cv_model)
+
+# Variable Importance ausgeben
+importance(rf_model)
+varImpPlot(rf_model)
 
 
-
-library(caret)
-set.seed(123)
+set.seed(123)  # Für Reproduzierbarkeit
 fitControl <- trainControl(
-  method = "cv",      # Kreuzvalidierung
-  number = 10         # Anzahl der Folds
+  method = "cv",       # Kreuzvalidierung
+  number = 10,         # Anzahl der Folds
+  savePredictions = "final",
+  classProbs = TRUE    # Speichern der Klassenwahrscheinlichkeiten
 )
+colnames(daten)
+trainModel <- train(deprivation_outcome ~ ., data = daten,
+                    method = "rf",
+                    trControl = fitControl,
+                    ntree = 500)
 
-rf_model_cv <- train(
-  as.factor(deprivation_outcome) ~ ., 
-  data = daten, 
-  method = "rf",
-  trControl = fitControl,
-  ntree = 500
-)
+print(trainModel)
 
-# Ergebnisse der Kreuzvalidierung ausgeben
-print(rf_model_cv)
+
+
+levels(daten$deprivation_outcome)
+levels(daten$deprivation_outcome) <- make.names(levels(daten$deprivation_outcome))
+trainModel <- train(deprivation_outcome ~ ., data = daten,
+                    method = "rf",
+                    trControl = fitControl,
+                    ntree = 500)
 
