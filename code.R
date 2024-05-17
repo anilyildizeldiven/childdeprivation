@@ -248,23 +248,23 @@ daten_haushalt <- daten_haushalt %>%
 # # Überprüfen Sie, ob alle NAs beseitigt wurden
 # sapply(daten_haushalt, function(x) sum(is.na(x)))
 
-#daten_haushalt <- daten_haushalt %>%
- # mutate(
-    # # Finanzstabilität und Ressourcen
-    # Savings_Income_Ratio = Monthly_Saving / Household_Net_Income,
-    # Unexpected_Expense_Coverage = ifelse(Pay_for_Unexpected_Expenses == "ja", 1, 0),
-    # 
-    # # Soziale Unterstützung und Umfeld
-    # Normalized_Social_Support = OSLO_3_Social_Support_Scale / Number_of_People_in_Household,
-    # Good_Access_Public_Transport = ifelse(Distance_to_Nearest_Public_Transport <= 500, 1, 0),
-    # 
-    # # Haushaltsstruktur und Lebensbedingungen
-    # Child_Room_Ratio = Number_of_Children_Rooms / Number_of_People_in_Household,
-    # Dependent_Care_Ratio = ifelse(Care_Dependent_Persons_in_Household == "ja", 1, 0) / Number_of_People_in_Household,
-    # 
-    # Deprivation Risk Index
-    # Deprivation_Risk_Index = (1 - Savings_Income_Ratio) + (1 - Unexpected_Expense_Coverage) + (1 - Normalized_Social_Support),
- # )
+daten_haushalt <- daten_haushalt %>%
+mutate(
+# Finanzstabilität und Ressourcen
+Savings_Income_Ratio = Monthly_Saving / Household_Net_Income,
+Unexpected_Expense_Coverage = ifelse(Pay_for_Unexpected_Expenses == "ja", 1, 0),
+
+# Soziale Unterstützung und Umfeld
+Normalized_Social_Support = OSLO_3_Social_Support_Scale / Number_of_People_in_Household,
+Good_Access_Public_Transport = ifelse(Distance_to_Nearest_Public_Transport <= 500, 1, 0),
+
+# Haushaltsstruktur und Lebensbedingungen
+Child_Room_Ratio = Number_of_Children_Rooms / Number_of_People_in_Household,
+Dependent_Care_Ratio = ifelse(Care_Dependent_Persons_in_Household == "ja", 1, 0) / Number_of_People_in_Household,
+
+#Deprivation Risk Index
+Deprivation_Risk_Index = (1 - Savings_Income_Ratio) + (1 - Unexpected_Expense_Coverage) + (1 - Normalized_Social_Support),
+)
 
 
 #####################################
@@ -303,36 +303,33 @@ daten <- daten %>%
 
 daten <- daten %>%
   mutate(
-    # # Sozial- und Familienstruktur
-    # Social_Structure_Index = Num_Parent_Child_Relationships + Num_Grandparent_Present,
-    # Total_Dependents = Num_Parent_Child_Relationships + Num_Grandparent_Present,  # Addieren Sie weitere abhängige Personen, falls vorhanden
-    # 
-    # # Wirtschaftlicher Druck
-    # Economic_Strain_Index = as.integer(Monthly_Saving == "nein, aus finanziellen Gründen nicht") +
-    #   as.integer(Replace_Furniture == "nein, aus finanziellen Gründen nicht") +
-    #   as.integer(Pay_for_Unexpected_Expenses == "nein, aus finanziellen Gründen nicht"),
-    # 
-    # Dependency_Ratio = (Num_Parent_Child_Relationships + Num_Grandparent_Present) / Number_of_People_in_Household,
-    # Income_to_needs_ratio = Household_Net_Income / (Number_of_People_in_Household * Lower_Limit_Equivalent_Income),
-    # # Ökonomische Indikatoren
-    # Is_Receiving_ALG_II = as.integer(Receipt_of_ALG_II_or_Hartz_IV == "ja"),
-    # Is_Below_Poverty_Line = as.integer(Below_60_Percent_Median_Income == "ja"),
-    # 
-    # # Komplexerer Index könnte weitere Variablen umfassen
-    # Financial_Security_Index = Economic_Strain_Index - Is_Receiving_ALG_II - Is_Below_Poverty_Line,
-    # # Erstellen der Deprivation Outcome Variable
+    # Sozial- und Familienstruktur
+    Social_Structure_Index = Num_Parent_Child_Relationships + Num_Grandparent_Present,
+    Total_Dependents = Num_Parent_Child_Relationships + Num_Grandparent_Present,  # Addieren Sie weitere abhängige Personen, falls vorhanden
+
+    # Wirtschaftlicher Druck
+    Economic_Strain_Index = as.integer(Monthly_Saving == "nein, aus finanziellen Gründen nicht") +
+      as.integer(Replace_Furniture == "nein, aus finanziellen Gründen nicht") +
+      as.integer(Pay_for_Unexpected_Expenses == "nein, aus finanziellen Gründen nicht"),
+
+    Dependency_Ratio = (Num_Parent_Child_Relationships + Num_Grandparent_Present) / Number_of_People_in_Household,
+    Income_to_needs_ratio = Household_Net_Income / (Number_of_People_in_Household * Lower_Limit_Equivalent_Income),
+    # Ökonomische Indikatoren
+    Is_Receiving_ALG_II = as.integer(Receipt_of_ALG_II_or_Hartz_IV == "ja"),
+    Is_Below_Poverty_Line = as.integer(Below_60_Percent_Median_Income == "ja"),
+
+    # Komplexerer Index könnte weitere Variablen umfassen
+    Financial_Security_Index = Economic_Strain_Index - Is_Receiving_ALG_II - Is_Below_Poverty_Line,
+    # Erstellen der Deprivation Outcome Variable
     deprivation_outcome = ifelse(gesamt_depriviert >= 3, 1, 0) # Als depriviert gilt, wer bei 3 oder mehr Kriterien betroffen ist 
     
     )
 
 
 # Überprüfen, ob 'deprivation_outcome' als Faktor behandelt wird
-if (!is.factor(daten$deprivation_outcome)) {
-  daten$deprivation_outcome <- factor(daten$deprivation_outcome)
-}
+
 daten <- daten %>%
   drop_na()
-
 
 # Entfernen oder Ersetzen von NaN-Werten
 daten <- daten %>% 
@@ -342,27 +339,101 @@ daten <- daten %>%
 daten <- daten %>% 
   mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
 
-
+if (!is.factor(daten$deprivation_outcome)) {
+  daten$deprivation_outcome <- factor(daten$deprivation_outcome)
+}
 ############# Modell
 
 levels(daten$deprivation_outcome)
 levels(daten$deprivation_outcome) <- make.names(levels(daten$deprivation_outcome))
 
-# Erstellen von Trainings- und Testdaten
-trainIndex <- createDataPartition(daten$deprivation_outcome, p = .8, 
+# Auswahl der Features für das Random Forest Modell
+features <- c("Num_Same_Household", "Num_Different_Household", "Num_Parent_Child_Relationships",
+              "Num_Grandparent_Present", "Num_External_Relationships", "Number_of_People_in_Household",
+              "Support_for_Personal_Problems", "Care_and_Interest", "Practical_Help",
+              "Number_of_Children_Rooms", "Care_Dependent_Persons_in_Household", "Monthly_Saving",
+              "Replace_Furniture", "Pay_for_Unexpected_Expenses", "Household_Net_Income",
+              "OSLO_3_Social_Support_Scale", "Distance_to_Nearest_Public_Transport",
+              "Household_Level_Person_Count", "Age", "Savings_Income_Ratio", "Unexpected_Expense_Coverage",
+              "Normalized_Social_Support", "Good_Access_Public_Transport", "Child_Room_Ratio",
+              "Dependent_Care_Ratio", "Deprivation_Risk_Index")
+
+
+# Zielvariable
+target <- "deprivation_outcome"
+
+# Daten vorbereiten
+daten_model <- daten[, c(features, target)]
+
+# Entfernen von fehlenden Werten
+daten_model <- na.omit(daten_model)
+# Aktualisieren Sie die Trainingskontrolle, um Vorhersagen und Resampling-Ergebnisse zu speichern
+fitControl <- trainControl(
+  method = "cv",  # Kreuzvalidierung
+  number = 10,    # Anzahl der Kreuzvalidierungsfalten
+  savePredictions = "final",  # Speichern der Vorhersagen für jeden Fold
+  returnResamp = "all"  # Speichert Resampling-Statistiken für jeden Fold
+)
+
+# Annahme daten_model ist bereits definiert und enthält die notwendigen Daten
+trainIndex <- createDataPartition(daten_model$deprivation_outcome, p = .7, 
                                   list = FALSE, 
                                   times = 1)
-trainData <- daten[ trainIndex,]
-testData  <- daten[-trainIndex,]
+trainData <- daten_model[trainIndex, ]
+testData <- daten_model[-trainIndex, ]
 
-
-# Training des Modells mit Trainingsdaten
+# Training des Modells
 trainModel <- train(deprivation_outcome ~ ., data = trainData,
                     method = "rf",
                     trControl = fitControl,
                     ntree = 100)
 
-print(trainModel)
+# Plot der Modell-Performance
+results <- trainModel$results
+
+
+# Erstellen eines Plots für die Genauigkeit jeder Kreuzvalidierungsfalte
+ggplot(trainModel$results, aes(x = mtry, y = Accuracy)) + 
+  geom_point() +  # Punkte für die tatsächlichen Datenpunkte jeder Faltung
+  geom_line() +  # Linie zur Verbindung der Punkte
+  geom_errorbar(aes(ymin = Accuracy - AccuracySD, ymax = Accuracy + AccuracySD), width = 0.2) + # Fehlerbalken hinzufügen
+  ggtitle("Genauigkeit über die verschiedenen mtry Werte") +
+  xlab("Anzahl der Variablen pro Split (mtry)") +
+  ylab("Genauigkeit mit Standardabweichung")
+
+
+# Vorhersagen auf den Testdaten
+predictions <- predict(trainModel, testData)
+
+# Bewertung der Vorhersagen
+confusionMatrix <- confusionMatrix(predictions, testData$deprivation_outcome)
+print(confusionMatrix)
+
+# Berechnung der Genauigkeit aus der Konfusionsmatrix
+accuracy <- sum(diag(confusionMatrix$table)) / sum(confusionMatrix$table)
+print(paste("Accuracy:", accuracy))
+
+
+# Berechnung weiterer Bewertungsmaße
+print(confusionMatrix$overall)  # Gibt eine Liste von Bewertungsmaßen aus, einschließlich Genauigkeit, Kappa usw.
+
+
+
+
+# Wichtigkeit der Variablen aus dem Random Forest-Modell
+importance <- varImp(trainModel, scale = TRUE)
+print(importance)
+plot(importance, main = "Variable Importance")
+
+
+
+
+
+
+
+
+
+
 
 
 
