@@ -417,37 +417,14 @@ print(paste("Accuracy:", accuracy))
 # Berechnung weiterer Bewertungsmaße
 print(confusionMatrix$overall)  # Gibt eine Liste von Bewertungsmaßen aus, einschließlich Genauigkeit, Kappa usw.
 
-
-
-
 # Wichtigkeit der Variablen aus dem Random Forest-Modell
 importance <- varImp(trainModel, scale = TRUE)
 print(importance)
 plot(importance, main = "Variable Importance")
 
-
-
-
-
-# Angenommen, `trainData` ist Ihr DataFrame mit den relevanten Variablen
-# Berechnen der Korrelationsmatrix
-cor_matrix <- cor(trainData, use = "complete.obs", method = "pearson")
-
 #####################reduce model again
-# Selektieren nur der numerischen Variablen
-numeric_data <- trainData[sapply(trainData, is.numeric)]
 
-# Berechnen der Korrelationsmatrix für die numerischen Variablen
-cor_matrix <- cor(numeric_data, use = "complete.obs", method = "pearson")
-
-# Visualisierung der Korrelationsmatrix
-corrplot(cor_matrix, method = "color", order = "hclust", 
-         addCoef.col = "black", # Fügt Korrelationskoeffizienten hinzu
-         tl.col = "black", # Farbe der Textbeschriftungen
-         tl.srt = 45) # Rotation der Textbeschriftungen
-
-
-# Erstellen eines neuen Datensatzes ohne die ausgewählten Variablen
+# Erstellen eines neuen Datensatzes ohne die ausgewählten Variablen aus korrelationsanalyse
 reduced_data <- trainData[, !names(trainData) %in% c("Number_of_People_in_Household", "Child_Room_Ratio", "Deprivation_Risk_Index")]
 
 # Modell neu trainieren
@@ -455,12 +432,10 @@ reduced_model <- train(deprivation_outcome ~ ., data = reduced_data, method = "r
 
 # Leistung des neuen Modells vergleichen
 print(reduced_model$results)
-
-
+colnames(reduced_data)
 # Wichtigkeit der Variablen aus dem Random Forest-Modell
 importance <- varImp(reduced_model, scale = TRUE)
 print(importance)
-plot(importance, main = "Variable Importance")
 
 
 
