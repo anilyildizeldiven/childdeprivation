@@ -3,31 +3,11 @@ library(readxl)
 library(dplyr)
 library(foreign)
 library(caret)
+library(glmnet)
+library(car)
+library(carData)
 
-daten_personen <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_personen.sav", to.data.frame = TRUE)
-
-
-# Entferne Zeilen mit fehlenden Werten
-# Funktion zum Ersetzen von NA-Werten
-replace_na_values <- function(df) {
-  df %>%
-    mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .))) %>%
-    mutate(across(where(is.factor), ~ ifelse(is.na(.), "unbekannt", .))) %>%
-    mutate(across(where(is.character), ~ ifelse(is.na(.), "unbekannt", .)))
-}
-
-# NA-Werte in data_reduced ersetzen
-data_reduced <- replace_na_values(data_reduced)
-
-
-
-daten_personen$y <- rowSums(daten_personen == "Nein aus finanziellen Gründen", na.rm = TRUE)
-scores <- rowSums(daten_personen == "Nein aus finanziellen Gründen", na.rm = TRUE)
-
-variablen <- read_xlsx("/Users/anilcaneldiven/Desktop/variablennamenpersonen.xlsx")
-
-
-relevante_variablen <- c(
+relevante_variablen2 <- c(
   "INTNR",
   "IZP",
   "k_extern",
@@ -389,16 +369,112 @@ relevante_variablen <- c(
   "h71317_va"
 )
 
+# lade personen datensatz hoch
+daten_personen <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_personen.sav", to.data.frame = TRUE)
 
-daten1 <- daten_personen %>%
-  select(-all_of(relevante_variablen))
-length(names(daten1))
+# Funktion zum Ersetzen von NA-Werten
+replace_na_values <- function(df) {
+  df %>%
+    mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .))) %>%
+    mutate(across(where(is.factor), ~ ifelse(is.na(.), "unbekannt", .))) %>%
+    mutate(across(where(is.character), ~ ifelse(is.na(.), "unbekannt", .)))
+}
 
+###### bilde scores für deprivation
+
+# Auswählen der relevanten Variablen
+relevante_variablen <- c(
+  "hh11073", "hh11075", "hh11070_1", "hh11070_2", "hh11070_3",  # Finanzielle Deprivation
+  "h11014", "h11014_mu", "h11014_va", "h11015", "h11015_mu", "h11015_va",  # Bildungsstatus
+  "h11018", "h11018_mu", "h11018_va", "h11021_mu", "h11021_va",  # Erwerbstätigkeit
+  "hh11001", "hh11066", "hh11079",  # Wohnsituation
+  "hh11058", "hh11059", "hh11060",  # Soziale Unterstützung
+  "h22803_10", "h22803_11", "h22803_12", "h22803_14", "h22803_3", "h22803_6"  # Deprivationsindikatoren
+)
+
+# Extraktion der relevanten Variablen aus dem Datensatz
+daten_personen_relevant <- daten_personen[, relevante_variablen]
+
+# Funktion zur Umwandlung von Faktoren in numerische Werte
+convert_factor_to_numeric <- function(factor_column) {
+  suppressWarnings(as.numeric(as.character(factor_column)))
+}
+
+# Überprüfen und Umwandeln von Faktoren in numerische Werte
+daten_personen_relevant <- daten_personen_relevant %>%
+  mutate(across(where(is.factor), ~ convert_factor_to_numeric(.)))
+
+# Manuelle Umkodierung spezifischer Variablen
+daten_personen_relevant <- daten_personen_relevant %>%
+  mutate(
+    hh11073 = as.numeric(hh11073 == "ja"),
+    hh11075 = case_when(
+      hh11075 == "0" ~ 0,
+      hh11075 == "unter 150 Euro" ~ 1,
+      hh11075 == "150 bis unter 300 Euro" ~ 2,
+      hh11075 == "300 bis unter 450 Euro" ~ 3,
+      hh11075 == "450 bis unter 600 Euro" ~ 4,
+      hh11075 == "600 bis unter 900 Euro" ~ 5,
+      hh11075 == "900 bis unter 1200 Euro" ~ 6,
+      hh11075 == "1200 bis unter 1500 Euro" ~ 7,
+      hh11075 == "1500 bis unter 2000 Euro" ~ 8,
+      hh11075 == "2000 bis unter 2600 Euro" ~ 9,
+      hh11075 == "2600 bis unter 3200 Euro" ~ 10,
+      hh11075 == "3200 bis unter 4000 Euro" ~ 11,
+      hh11075 == "4000 bis unter 5000 Euro" ~ 12,
+      hh11075 == "5000 bis unter 6000 Euro" ~ 13,
+      hh11075 == "6000 bis unter 7500 Euro" ~ 14,
+      hh11075 == "7500 bis unter 9000 Euro" ~ 15,
+      hh11075 == "9000 bis unter 12000 Euro" ~ 16,
+      hh11075 == "12000 bis unter 15000 Euro" ~ 17,
+      hh11075 == "15000 Euro und mehr" ~ 18,
+      TRUE ~ NA_real_
+    ),
+    hh11070_1 = as.numeric(hh11070_1 == "nein, aus finanziellen Gründen nicht"),
+    hh11070_2 = as.numeric(hh11070_2 == "nein, aus finanziellen Gründen nicht"),
+    hh11070_3 = as.numeric(hh11070_3 == "nein, aus finanziellen Gründen nicht"),
+    h11014 = convert_factor_to_numeric(h11014),
+    h11014_mu = convert_factor_to_numeric(h11014_mu),
+    h11014_va = convert_factor_to_numeric(h11014_va),
+    h11015 = convert_factor_to_numeric(h11015),
+    h11015_mu = convert_factor_to_numeric(h11015_mu),
+    h11015_va = convert_factor_to_numeric(h11015_va),
+    h11018 = as.numeric(h11018 == "nein"),
+    h11018_mu = as.numeric(h11018_mu == "nein"),
+    h11018_va = as.numeric(h11018_va == "nein"),
+    hh11001 = as.numeric(hh11001),
+    hh11066 = as.numeric(hh11066),
+    hh11079 = as.numeric(hh11079),
+    hh11058 = convert_factor_to_numeric(hh11058),
+    hh11059 = convert_factor_to_numeric(hh11059),
+    hh11060 = convert_factor_to_numeric(hh11060),
+    h22803_10 = as.numeric(h22803_10 == "Nein aus finanziellen Gründen"),
+    h22803_11 = as.numeric(h22803_11 == "Nein aus finanziellen Gründen"),
+    h22803_12 = as.numeric(h22803_12 == "Nein aus finanziellen Gründen"),
+    h22803_14 = as.numeric(h22803_14 == "Nein aus finanziellen Gründen"),
+    h22803_3 = as.numeric(h22803_3 == "Nein aus finanziellen Gründen"),
+    h22803_6 = as.numeric(h22803_6 == "Nein aus finanziellen Gründen")
+  )
+
+# Berechnung des Deprivationsindex
+daten_personen_relevant <- daten_personen_relevant %>%
+  rowwise() %>%
+  mutate(y = sum(c_across(everything()), na.rm = TRUE))
+
+# Hinzufügen des Deprivationsindex zum Originaldatensatz
+daten_personen$y <- daten_personen_relevant$y
+
+# lade lookup tabele für colnames hoch
+variablen <- read_xlsx("/Users/anilcaneldiven/Desktop/variablennamenpersonen.xlsx")
+
+# daten1 <- daten_personen %>%
+#   select(-all_of(relevante_variablen2))
+daten1 <- daten_personen 
 nzv <- nearZeroVar(daten1, saveMetrics = TRUE)
 daten2 <- daten1[, !nzv$nzv]
 
-length(names(daten2))
-# 450 schon mal weg
+
+### einteilung nuemric und categorical
 
 numeric_vars <- sapply(daten2, is.numeric)
 categorical_vars <- sapply(daten2, is.factor)
@@ -406,9 +482,10 @@ categorical_vars <- sapply(daten2, is.factor)
 data_numeric <- daten2[, numeric_vars]
 data_categorical <- daten2[, categorical_vars]
 
-length(colnames(data_categorical))
+# data_numeric <- replace_na_values(data_numeric)
+# data_categorical <- replace_na_values(data_categorical)
 
-####
+#### correlation numeric
 
 data_numeric <- data_numeric %>% 
   mutate(across(everything(), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
@@ -419,11 +496,20 @@ high_cor <- findCorrelation(cor_matrix, cutoff = 0.9)
 
 data_numeric <- data_numeric[, -high_cor]
 
+# ### lasso
+# # Matrix der Prädiktoren und Zielvariable
+# x <- as.matrix(data_numeric)
+# y <- daten_personen_relevant$y
+# 
+# # Lasso Regression
+# lasso_model <- cv.glmnet(x, y, alpha = 1)
+# selected_vars <- coef(lasso_model, s = "lambda.min")
+# selected_vars <- row.names(selected_vars)[selected_vars[, 1] != 0]
+# selected_vars <- selected_vars[-1]
+# data_reduced_lasso <- data_numeric[, selected_vars]
 
-# Laden des Pakets
-library(caret)
-data_categorical$y <- scores
-
+### chi quared
+data_categorical$y <- daten_personen_relevant$y
 
 # Dummy-Codierung der kategorialen Variablen
 dummy_model <- dummyVars(y ~ ., data = data_categorical)
@@ -440,11 +526,19 @@ important_categorical_vars <- unique(sub("\\..*", "", important_dummy_vars))
 # Reduzierung der ursprünglichen Daten auf die wichtigen Variablen
 data_categorical_reduced <- data_categorical[, c(important_categorical_vars, "y")]
 
-data_new <- cbind(data_categorical_reduced,data_numeric)
+### VIF
 
-# Anzahl der wichtigen Variablen
-print(length(colnames(data_new)))
+# Berechnung von VIF
+vif_values <- vif(lm(data_numeric))
 
+# Schwellenwert für VIF (z.B. 5)
+high_vif <- names(vif_values[vif_values > 5])
+
+# Entfernen der Variablen mit hohem VIF
+data_numeric_vif_reduced <- data_numeric[, !colnames(data_numeric) %in% high_vif]
+
+length(colnames(data_numeric_vif_reduced))
+length(colnames(data_categorical_reduced))
 
 
 
