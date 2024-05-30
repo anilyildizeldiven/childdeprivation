@@ -6,6 +6,8 @@ library(caret)
 library(glmnet)
 library(car)
 library(carData)
+library(FSelectorRcpp)
+library(infotheo)
 
 relevante_variablen2 <- c(
   "INTNR",
@@ -380,6 +382,7 @@ replace_na_values <- function(df) {
     mutate(across(where(is.character), ~ ifelse(is.na(.), "unbekannt", .)))
 }
 
+
 ###### bilde scores für deprivation
 
 # Auswählen der relevanten Variablen
@@ -464,27 +467,65 @@ daten_personen_relevant <- daten_personen_relevant %>%
 # Hinzufügen des Deprivationsindex zum Originaldatensatz
 daten_personen$y <- daten_personen_relevant$y
 
+# Extraktion der relevanten Variablen aus dem Datensatz
+daten_personen <- daten_personen[, !colnames(daten_personen) %in% relevante_variablen2]
+daten_personen1 <- replace_na_values(daten_personen)
+
 # lade lookup tabele für colnames hoch
 variablen <- read_xlsx("/Users/anilcaneldiven/Desktop/variablennamenpersonen.xlsx")
 
 # daten1 <- daten_personen %>%
 #   select(-all_of(relevante_variablen2))
-daten1 <- daten_personen 
+daten1 <- daten_personen1
 nzv <- nearZeroVar(daten1, saveMetrics = TRUE)
 daten2 <- daten1[, !nzv$nzv]
 
 
 ### einteilung nuemric und categorical
 
+# Umwandlung der Charakter-Spalten in Faktoren
+daten2[] <- lapply(daten2, function(x) if(is.character(x)) as.factor(x) else x)
+
+# Einteilung in numerische und kategoriale Variablen
 numeric_vars <- sapply(daten2, is.numeric)
 categorical_vars <- sapply(daten2, is.factor)
 
 data_numeric <- daten2[, numeric_vars]
 data_categorical <- daten2[, categorical_vars]
+data_categorical$y <- daten_personen_relevant$y
 
-# data_numeric <- replace_na_values(data_numeric)
-# data_categorical <- replace_na_values(data_categorical)
+length(colnames(data_categorical))
+length(colnames(data_numeric))
 
+data_numeric <- replace_na_values(data_numeric)
+data_categorical <- replace_na_values(data_categorical)
+
+## categorial
+
+## Informationsgehalt
+# Anzahl der Bins (du kannst die Anzahl anpassen)
+num_bins <- 5
+
+# Diskretisiere die Zielvariable 'y' basierend auf der Verteilung
+quantiles <- quantile(data_categorical$y, probs = seq(0, 1, length.out = num_bins + 1), na.rm = TRUE)
+data_categorical$y <- cut(data_categorical$y, breaks = quantiles, include.lowest = TRUE, labels = FALSE)
+
+
+# Berechne den Informationsgehalt für jede Variable
+info_gain <- information_gain(y ~ ., data_categorical)
+
+#Berechne den Durchschnitt des Informationsgehalts
+average_info_gain <- mean(info_gain$importance)
+
+# Identifiziere die Variablen, deren Informationsgehalt unter dem Durchschnitt liegt
+below_average_vars <- info_gain$attributes[info_gain$importance < average_info_gain]
+
+# Entferne die Variablen mit Informationsgehalt unter dem Durchschnitt
+data_categorical_reduced <- data_categorical[, !names(data_categorical) %in% below_average_vars]
+length(colnames(data_categorical_reduced))
+
+
+## nuemrisch
 #### correlation numeric
 
 data_numeric <- data_numeric %>% 
@@ -495,50 +536,39 @@ cor_matrix <- cor(data_numeric, use = "complete.obs")
 high_cor <- findCorrelation(cor_matrix, cutoff = 0.9)
 
 data_numeric <- data_numeric[, -high_cor]
+data_numeric <- data_numeric[, !colnames(data_numeric) %in% "y"]
 
-# ### lasso
-# # Matrix der Prädiktoren und Zielvariable
-# x <- as.matrix(data_numeric)
-# y <- daten_personen_relevant$y
-# 
-# # Lasso Regression
-# lasso_model <- cv.glmnet(x, y, alpha = 1)
-# selected_vars <- coef(lasso_model, s = "lambda.min")
-# selected_vars <- row.names(selected_vars)[selected_vars[, 1] != 0]
-# selected_vars <- selected_vars[-1]
-# data_reduced_lasso <- data_numeric[, selected_vars]
+length(colnames(data_numeric))
+### lasso
+# Matrix der Prädiktoren und Zielvariable
 
-### chi quared
-data_categorical$y <- daten_personen_relevant$y
+x <- as.matrix(data_numeric)
+y <- daten_personen_relevant$y
 
-# Dummy-Codierung der kategorialen Variablen
-dummy_model <- dummyVars(y ~ ., data = data_categorical)
-data_categorical_transformed <- predict(dummy_model, newdata = data_categorical)
+# Lasso Regression
+lasso_model <- cv.glmnet(x, y, alpha = 1)
+selected_vars <- coef(lasso_model, s = "lambda.min")
+selected_vars <- row.names(selected_vars)[selected_vars[, 1] != 0]
+selected_vars <- selected_vars[-1]
+data_reduced_lasso <- data_numeric[, selected_vars]
 
-# Chi-Quadrat-Test auf die Dummy-codierten Variablen anwenden
-chi2_results <- nearZeroVar(data_categorical_transformed, saveMetrics = TRUE)
-important_dummy_vars <- rownames(chi2_results[chi2_results$nzv == FALSE, ])
-
-# Wichtige Dummy-Variablen identifizieren und die ursprünglichen Variablennamen extrahieren
-# Hier nehmen wir an, dass der ursprüngliche Variablenname durch einen Punkt getrennt ist
-important_categorical_vars <- unique(sub("\\..*", "", important_dummy_vars))
-
-# Reduzierung der ursprünglichen Daten auf die wichtigen Variablen
-data_categorical_reduced <- data_categorical[, c(important_categorical_vars, "y")]
+length(colnames(data_reduced_lasso))
 
 ### VIF
 
 # Berechnung von VIF
-vif_values <- vif(lm(data_numeric))
+vif_values <- vif(lm(data_reduced_lasso))
 
 # Schwellenwert für VIF (z.B. 5)
 high_vif <- names(vif_values[vif_values > 5])
 
 # Entfernen der Variablen mit hohem VIF
-data_numeric_vif_reduced <- data_numeric[, !colnames(data_numeric) %in% high_vif]
+data_numeric_vif_reduced <- data_reduced_lasso[, !colnames(data_reduced_lasso) %in% high_vif]
+
 
 length(colnames(data_numeric_vif_reduced))
 length(colnames(data_categorical_reduced))
+
 
 
 
