@@ -373,7 +373,7 @@ relevante_variablen2 <- c(
 
 # lade personen datensatz hoch
 daten_personen <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_personen.sav", to.data.frame = TRUE)
-
+View(daten_personen)
 # Funktion zum Ersetzen von NA-Werten
 replace_na_values <- function(df) {
   df %>%
@@ -503,7 +503,7 @@ data_categorical <- replace_na_values(data_categorical)
 ## categorial
 
 ## Informationsgehalt
-# Anzahl der Bins (du kannst die Anzahl anpassen)
+# Anzahl der Bins 
 num_bins <- 5
 
 # Diskretisiere die Zielvariable 'y' basierend auf der Verteilung
@@ -524,6 +524,30 @@ below_average_vars <- info_gain$attributes[info_gain$importance < average_info_g
 data_categorical_reduced <- data_categorical[, !names(data_categorical) %in% below_average_vars]
 length(colnames(data_categorical_reduced))
 
+daten2<- data_categorical_reduced
+# One-Hot-Encoding für kategoriale Variablen durchführen
+dummy_vars <- dummyVars("~ .", data = daten2, fullRank = TRUE)
+data_encoded <- predict(dummy_vars, newdata = daten2)
+
+# Daten in Matrixform für glmnet umwandeln
+x <- as.matrix(data_encoded[, -ncol(data_encoded)])  # Entferne die Zielvariable 'y'
+y <- as.factor(daten2$y)
+
+
+# Führe Lasso-Regression durch
+lasso_model <- cv.glmnet(x, y, alpha = 1, family = "multinomial", type.multinomial = "grouped")
+
+# Extrahiere die wichtigen Variablen
+lasso_coeffs <- coef(lasso_model, s = "lambda.min")
+
+# Extrahiere die Namen der wichtigen Variablen
+important_vars <- unique(unlist(lapply(lasso_coeffs, function(coeff) {
+  rownames(coeff)[which(coeff != 0)]
+})))
+
+# Ausgabe der wichtigen Variablen (ohne den Intercept)
+important_vars <- important_vars[important_vars != "(Intercept)"]
+print(important_vars)
 
 ## nuemrisch
 #### correlation numeric
@@ -568,6 +592,7 @@ data_numeric_vif_reduced <- data_reduced_lasso[, !colnames(data_reduced_lasso) %
 
 length(colnames(data_numeric_vif_reduced))
 length(colnames(data_categorical_reduced))
+
 
 
 

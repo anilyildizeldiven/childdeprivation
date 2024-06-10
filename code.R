@@ -18,7 +18,7 @@ library(tidyverse)
 
 # Lese den Datensatz ein
 daten_beziehungen <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_beziehungen.sav", to.data.frame = TRUE)
-
+View(daten_beziehungen)
 nrow(daten_beziehungen)
 
 # Umbenennen der Variablen
@@ -86,7 +86,44 @@ aggregated_relationship_data <- daten_beziehungen %>%
 ########### 2 DatenHaushalt
 # Lese den Datensatz ein
 daten_haushalt <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_haushalt.sav", to.data.frame = TRUE)
-nrow(daten_haushalt)
+
+relevant_variables_HH <- c("hh11900",
+                          "hh11901",
+                           "hh11902",
+                           "point",
+                           "telja",
+                           "oa_result",
+                           "nationn",
+                           "INTNR_hh",
+                           "ANZPHH_hh",
+                           "LMETH_hh",
+                           "CATI_SW_hh",
+                           "TRANCHE_hh",
+                           "vollstaendig_hh",
+                           "TRACK_hh",
+                           "t_forc_hh",
+                           "ch_tele_hh",
+                           "ch_email_hh",
+                           "ch_post_hh",
+                           "telja_hh",
+                           "FO_Dat_hh",
+                           "FORC_hh",
+                           "INTERNR_hh",
+                           "foreal_hh",
+                           "verinn1_hh",
+                           "verinn2_hh",
+                          "vkonv_hh",
+                           "cati_vk_hh",
+                           "panelbr_hh",
+                           "GewHH",
+                           "calHH",
+                           "GemID",
+                           "m_intyear_hh",
+                           "m_intmonth_hh")
+
+# VARIABELN rausselektieren aus HH
+daten_haushalt <- daten_haushalt %>%
+  select(-all_of(relevant_variables_HH))
 
 # Umbenennen der Variablen
 daten_haushalt <- daten_haushalt %>%
@@ -108,9 +145,6 @@ daten_haushalt <- daten_haushalt %>%
     Household_Net_Income = hh11075,
     External_Children = hh11078,
     Number_of_External_Children = hh11079,
-    Interviewer_Filled_Silently = hh11900,
-    Save_Address = hh11901,
-    Address_Is_Correct = hh11902,
     m_hhmitzp = m_hhmitzp,
     Household_Type = k_haushaltstyp_hh,
     Family_Type = k_familientyp_hh,
@@ -124,43 +158,14 @@ daten_haushalt <- daten_haushalt %>%
     BIK_GK_10 = gkbik10,
     Political_Community_Size_Class = polgk,
     BLand = bland,
-    Point_Number_Drawn = point,
     Birth_Year = gebjahr_brutto,
     Gender_Recorded = sex_brutto,
     Tranche = TRANCHE,
-    Phone_Number_Found = telja,
     Building_Type = casa_typ,
     Number_of_Private_Households = casa_hh,
     Distance_to_Nearest_Public_Transport = casa_dist_opnv,
-    Group = oa_result,
-    Nationality_Recoded = nationn,
-    Interview_Number = INTNR_hh,
-    Household_Level_Person_Count = ANZPHH_hh,
-    Last_Deployment_Method = LMETH_hh,
-    CATI_Switch = CATI_SW_hh,
-    Household_Fully_Interviewed = vollstaendig_hh,
-    Household_Tracking_Level = TRACK_hh,
-    Total_Tracking_Final_Outcome = t_forc_hh,
-    New_Phone_Number = ch_tele_hh,
-    New_Email_Address = ch_email_hh,
-    New_Address = ch_post_hh,
-    Final_Outcome_Date = FO_Dat_hh,
-    Final_Outcome_Households = FORC_hh,
-    Interviewer_Number_Final_Outcome = INTERNR_hh,
-    Valid_Cases_Realized = foreal_hh,
-    First_Reminder_Sent = verinn1_hh,
-    Second_Reminder_Sent = verinn2_hh,
-    Conversion_Letter_Sent = vkonv_hh,
-    Pre_Contact_CATI = cati_vk_hh,
-    Household_Ready_for_Panel = panelbr_hh,
-    Contact_Count_Household_Level = anzkonHH1_hh,
     Total_Contact_Count_Household_Level = anzkonHH2_hh,
-    All_Contacts_in_Household_Incl_Person_Contact = anzkonHH3_hh,
-    Household_Weight_Without_Calibration = GewHH,
-    Calibrated_Household_Weight = calHH,
-    Community_ID = GemID,
-    Household_Interview_Year = m_intyear_hh,
-    Household_Interview_Month = m_intmonth_hh
+    All_Contacts_in_Household_Incl_Person_Contact = anzkonHH3_hh
   )
 
 
@@ -214,14 +219,9 @@ daten_haushalt <- daten_haushalt %>%
                       as.numeric(format(Sys.Date(), "%Y")) - Birth_Year,
                       NA_real_))  # Handle NA to prevent NAs from coercion
 
-# Definieren Sie eine Funktion zur Imputation der numerischen Variablen
+# Definiere eine Funktion zur Imputation der numerischen Variablen
 impute_numeric <- function(x) {
   ifelse(is.na(x), median(x, na.rm = TRUE), x)
-}
-
-# Definieren Sie eine Funktion zur Imputation der kategorialen Variablen
-impute_categorical <- function(x) {
-  ifelse(is.na(x), as.character(getmode(x)), as.character(x))
 }
 
 # Funktion zur Bestimmung des Modus
@@ -229,6 +229,12 @@ getmode <- function(v) {
   uniqv <- unique(v)
   uniqv[which.max(tabulate(match(v, uniqv)))]
 }
+
+# Definieren Sie eine Funktion zur Imputation der kategorialen Variablen
+impute_categorical <- function(x) {
+  ifelse(is.na(x), as.character(getmode(x)), as.character(x))
+}
+
 
 daten_haushalt <- daten_haushalt %>%
   mutate(across(where(is.factor), ~ fct_explicit_na(.x, na_level = "Unbekannt"))) %>%
@@ -245,9 +251,11 @@ daten_haushalt <- daten_haushalt %>%
   mutate(across(where(is.numeric), ~ impute_numeric(.x))) %>%
   mutate(across(where(is.factor), ~ impute_categorical(.x)))
 
-# # Überprüfen Sie, ob alle NAs beseitigt wurden
+# # Überprüfen, ob alle NAs beseitigt wurden
 # sapply(daten_haushalt, function(x) sum(is.na(x)))
 
+
+#NEUE variablenkreation
 daten_haushalt <- daten_haushalt %>%
 mutate(
 # Finanzstabilität und Ressourcen
@@ -282,7 +290,7 @@ daten <- daten %>%
     einkommen_depriviert = ifelse(Below_60_Percent_Median_Income == "ja", 1, 0),
     
     # Berechnen eines Gesamtdeprivationsindex
-    gesamt_depriviert = sparen_depriviert + moebel_depriviert + ausgaben_depriviert + alg2_depriviert + einkommen_depriviert,
+    gesamt_depriviert = sparen_depriviert + moebel_depriviert + ausgaben_depriviert + alg2_depriviert + einkommen_depriviert
      )
 
 # Variablen, die entfernt werden sollen
