@@ -21,86 +21,6 @@ data <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_personen.sav", to.dat
 data1 <- data %>%
   mutate(XALTER = as.numeric(as.character(XALTER)))
 
-
-########### merging the relational dataset to personal dataset
-
-
-daten_beziehungen <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_beziehungen.sav", to.data.frame = TRUE)
-View(daten_beziehungen)
-nrow(daten_beziehungen)
-
-# Umbenennen der Variablen
-daten_beziehungen <- daten_beziehungen %>%
-  rename(
-    Matchvariable_HHLFD = HHLFD,
-    Lfd1 = INTNR1,
-    Lfd2 = INTNR2,
-    Relationship_Type = RELATION,
-    Original_Pair_Relationship = RELATION_ori,
-    Pair_Relationship = PAIRRELATION,
-    Pair_Relationship_ori = PAIRRELATION_ori,
-    m_hhmitzp = m_hhmitzp,
-    Grandparent_Type = GrosselternArt,
-    Target_Person1 = IZP1,
-    Gender1 = GESCHLECHT1,
-    Target_Person2 = IZP2,
-    Gender2 = GESCHLECHT2,
-    Non_Household_Person1 = extern1,
-    Non_Household_Person2 = extern2
-  )
-
-
-lookup <- c("Pair_Relationship","Pair_Relationship_ori")
-
-# Annahme, dass die Daten geladen sind und 'daten_beziehungen' zur Verfügung steht
-daten_beziehungen <- daten_beziehungen%>%
-  select(-all_of(lookup))%>%
-  mutate(
-    # Konvertiere Faktoren zu numerischen Werten, vorausgesetzt die Werte sind gültige Zahlen
-    Non_Household_Person1 = as.numeric(as.character(Non_Household_Person1)),
-    Non_Household_Person2 = as.numeric(as.character(Non_Household_Person2))
-  ) %>%
-  mutate(
-    Same_Household = ifelse(Non_Household_Person1 == 0 & Non_Household_Person2 == 0, "Yes", "No"),
-    #External_Relationship_Interaction = interaction(Non_Household_Person1, Relationship_Type),
-    Is_Parent_Child = ifelse(
-      Relationship_Type %in% c(
-        "Leibliche Mutter/leiblicher Vater",
-        "Stiefmutter/Stiefvater",
-        "Adoptivmutter/Adoptivvater",
-        "Pflegemutter/Pflegevater",
-        "leibliche Tochter/leiblicher Sohn",
-        "Stieftochter/Stiefsohn",
-        "Adoptivtochter/Adoptivsohn",
-        "Pflegetochter/Pflegesohn"
-      ), 1, 0
-    ),
-    Grandparent_Present = ifelse(Grandparent_Type %in% c("väterlicherseits", "mütterlicherseits"), 1, 0)
-  )
-
-# Aggregation mit korrekter numerischer Verarbeitung
-aggregated_relationship_data <- daten_beziehungen %>%
-  group_by(Matchvariable_HHLFD) %>%
-  summarise(
-    Total_Relationships = n(),
-    Num_Same_Household = sum(Same_Household == "Yes", na.rm = TRUE),
-    Num_Different_Household = sum(Same_Household == "No", na.rm = TRUE),
-    Num_Parent_Child_Relationships = sum(Is_Parent_Child, na.rm = TRUE),
-    Num_Grandparent_Present = max(Grandparent_Present, na.rm = TRUE),
-    #External_Relationships = list(unique(External_Relationship_Interaction)),
-    Num_External_Relationships = sum(Non_Household_Person1 > 0 | Non_Household_Person2 > 0, na.rm = TRUE)
-  )
-# prepare relational dataset and select only grandparent present status
-aggregated_relationship_data1 <- aggregated_relationship_data %>%
-  select(Matchvariable_HHLFD,Num_Grandparent_Present)
-
-
-# merge relationaldataset to personal dataset to obtain Grandparent present feature
-data1 <- merge(data1,aggregated_relationship_data1, by.x="HHLFD", by.y="Matchvariable_HHLFD")
-
-##############
-
-
 # Filter the data
 data2 <- data1 %>%
   filter(IZP == "trifft zu" & XALTER < 12)
@@ -177,18 +97,15 @@ data7 <- data6 %>%
   filter(help2 == 0)
 
 # Label the new variables
+
 # data8 <- data7 %>%
 #   mutate(
 #     dep_child = factor(dep_child, levels = c(0, 1), labels = c("No", "Yes"))
 #     # ,
 #     # dep_child2 = factor(dep_child2, levels = c(0, 1), labels = c("No", "Yes"))
 #   )
-
-
 data7$dep_child <- factor(data7$dep_child, levels = c("Keine Deprivation", "Leichte Deprivation", "Moderate Deprivation", "Schwere Deprivation"))
 
-
-##########################
 
 # Lade die Excel-Liste
 var_list <- read_excel("/Users/anilcaneldiven/Desktop/consulting/VarListePersonen.xlsx")
@@ -208,16 +125,6 @@ for (i in seq_along(new_colnames)) {
 # Setze die neuen Spaltennamen in data9
 colnames(data8) <- new_colnames
 
-replace_na_values <- function(df) {
-  df %>%
-    mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .))) %>%
-    mutate(across(where(is.factor), ~ ifelse(is.na(.), "unbekannt", .))) %>%
-    mutate(across(where(is.character), ~ ifelse(is.na(.), "unbekannt", .)))
-}
-
-
-
-################
 
 # Funktion zur Überprüfung und Bereinigung von doppelten Spaltennamen
 clean_column_names <- function(df) {
@@ -236,6 +143,11 @@ clean_column_names <- function(df) {
 }
 
 
+
+
+# Bereinigen von doppelten Spaltennamen in data9
+data9 <- clean_column_names(data8)
+
 # Define the columns to be converted to numeric
 columns_to_convert <- c("Alter_der_Person_in_Jahren_Mutter_",                     
                         "Alter_der_Person_in_Jahren_Vater_" ,
@@ -250,10 +162,6 @@ columns_to_convert <- c("Alter_der_Person_in_Jahren_Mutter_",
                         "Zuwanderungsjahr_",
                         "tatsächliche_Arbeitszeit_Mutter_",
                         "tatsächliche_Arbeitszeit_Vater_")
-
-
-# Bereinigen von doppelten Spaltennamen in data9
-data9 <- clean_column_names(data8)
 
 # Convert the specified columns to numeric
 data10 <- data9 %>%
@@ -270,6 +178,7 @@ data12 <- data10 %>%
   ) %>%
   ungroup()
 
+# kreiire verfeinerung des kinderalters
 ## kreiiere neue variablen
 data13 <- data12 %>%
   mutate(
@@ -312,6 +221,14 @@ data_final_1 <- data_final %>%
 # muss zu faktoren werden
 data_final_1$`Person_lebt_nicht_im_Haushalt.1`<- as.factor(data_final_1$`Person_lebt_nicht_im_Haushalt.1`)
 
+# imputation function
+replace_na_values <- function(df) {
+  df %>%
+    mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .))) %>%
+    mutate(across(where(is.factor), ~ ifelse(is.na(.), "unbekannt", .))) %>%
+    mutate(across(where(is.character), ~ ifelse(is.na(.), "unbekannt", .)))
+}
+
 data_final_2 <- replace_na_values(data_final_1)
 
 # Function to clean column names to remove special characters
@@ -338,8 +255,7 @@ data_final_clean_3 <- data_final_clean_2%>%
 data_final_clean_4 <- data_final_clean_3 %>% 
   mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
 
-colnames(data_final_clean_4)
-
+### random forest
 # Set seed for reproducibility
 set.seed(123)
 
@@ -365,16 +281,4 @@ print(conf_matrix)
 # Plot der Variable Importance
 varImpPlot(rf_model)
 
-# ROC-Kurve und AUC-Wert berechnen (falls sinnvoll für kategorische Ausgabe)
-if (nlevels(data_test$dep_child) == 2) {
-  predictions <- predict(rf_model, data_test, type = "prob")[,2]
-  roc_curve <- roc(data_test$dep_child, predictions, levels = rev(levels(data_test$dep_child)))
-  auc_value <- auc(roc_curve)
-  
-  # Plot der ROC-Kurve
-  plot(roc_curve, main = paste("ROC-Kurve (AUC =", round(auc_value, 2), ")"))
-  abline(a = 0, b = 1, col = "red", lty = 2)
-  
-  cat("AUC-Wert:", auc_value, "\n")
-}
 
