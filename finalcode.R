@@ -48,7 +48,7 @@ data3 <- data2 %>%
          h91115_8_va, h91115_9_mu, h91115_9_va, h91115_10_mu, h91115_10_va, h91115_11_mu, h91115_11_va, k_bija_mu, k_bija_va, 
          k_HatPartner_mu, k_HatPartner_va, k_isced2011_mu, k_isced2011_va, k_natio_mu, k_natio_va, k_muttersprache1_mu, 
          k_muttersprache1_va, k_muttersprache2_mu, k_muttersprache2_va, XALTER_mu, XALTER_va, k_extern_mu, k_extern_va, 
-         k_ZP_mit_Eltern, k_isco08_mu3, k_isco08_va3, k_eseg_2_mu, k_eseg_2_va,Num_Grandparent_Present)
+         k_ZP_mit_Eltern, k_isco08_mu3, k_isco08_va3, k_eseg_2_mu, k_eseg_2_va)
 
 # Child deprivation
 # Drop previous deprivation variables if they exist
