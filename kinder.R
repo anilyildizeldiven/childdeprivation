@@ -80,9 +80,7 @@ data6 <- data5 %>%
     help2 = sum(is.na(c_across(starts_with("dep_c_")))),
     dep_child = case_when(
       help == 0 ~ "Keine Deprivation",
-      help == 1 ~ "Leichte Deprivation",
-      help == 2 ~ "Moderate Deprivation",
-      help >= 3 ~ "Schwere Deprivation"
+      help >= 1 ~ "Deprivation"
     )
   ) %>%
   ungroup()
@@ -106,7 +104,7 @@ data7 <- data6 %>%
 
 # Label the new variables
 
-data7$dep_child <- factor(data7$dep_child, levels = c("Keine Deprivation", "Leichte Deprivation", "Moderate Deprivation", "Schwere Deprivation"))
+data7$dep_child <- factor(data7$dep_child, levels = c("Keine Deprivation", "Deprivation"))
 
 
 # Lade die Excel-Liste
@@ -179,7 +177,7 @@ data12 <- data10 %>%
   ) %>%
   ungroup()
 
-# Create new variables relevant to children under 12
+# Create new variables
 data13 <- data12 %>%
   mutate(
     Durchschnittliches_Einkommen = rowMeans(select(., starts_with("Äquivalenzeinkommen_")), na.rm = TRUE),
@@ -195,11 +193,11 @@ data13 <- data12 %>%
       TRUE ~ "Niedrig"
     )
   )
-str(data13$Durchschnittliches_Einkommen)
+
 # Filter the data
-# data13 <- data13 %>%
-#   filter(Alter_Kategorie == "Kleinkind")
-nrow(data13)
+#data13 <- data13 %>%
+#  filter(Alter_Kategorie == "Kind")
+
 ###################
 
 # lasse alle irrelevanten variablen raus
@@ -334,15 +332,12 @@ remove_highly_correlated_numerical <- function(data, threshold = 0.9) {
 result2 <- remove_highly_correlated_numerical(result)
 
 
-
-
 ### random forest
 # Set seed for reproducibility
 set.seed(123)
 
 result2$HHLFD_ <- NULL
 
-str(result2)
 # Split the data into training and testing sets
 trainIndex <- createDataPartition(result2$dep_child, p = .8,
                                   list = FALSE,
@@ -364,5 +359,3 @@ print(conf_matrix)
 
 # Plot der Variable Importance
 varImpPlot(rf_model)
-
-
