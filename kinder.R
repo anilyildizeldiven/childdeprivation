@@ -13,6 +13,8 @@ library(randomForest)
 library(caret)
 library(foreign)
 library(readxl)
+library(Hmisc)
+library(data.table)
 
 # Load data
 data <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_personen.sav", to.data.frame = TRUE)
@@ -167,6 +169,7 @@ data10 <- data9 %>%
   mutate(across(all_of(columns_to_convert), ~ ifelse(is.na(.), 0, .)))
 
 
+
 # Assume data10 is your dataset filtered for children under 12
 
 # Calculate the number of children per household
@@ -177,42 +180,70 @@ data12 <- data10 %>%
   ) %>%
   ungroup()
 
-# Create new variables
-data13 <- data12 %>%
-  mutate(
-    Durchschnittliches_Einkommen = rowMeans(select(., starts_with("Äquivalenzeinkommen_")), na.rm = TRUE),
-    Alter_Kategorie = case_when(
-      Alter_der_Person_in_Jahren_ < 6 ~ "Kleinkind",
-      Alter_der_Person_in_Jahren_ >= 6 & Alter_der_Person_in_Jahren_ < 12 ~ "Kind"
-    ),
-    Relative_Entfernung_ÖPNV = ifelse(`Entfernung_zur_nächsten_ÖPNV-Haltest._(in_Metern)_` < 500, "Nah", "Weit"),
-    Kinder_pro_Zimmer = Anzahl_Kinder / Anzahl_Kinderzimmer_,
-    Soziale_Unterstützung_Kategorie = case_when(
-      `OSLO-3_Skala_Soziale_Unterstützung_` >= 12 ~ "Hoch",
-      `OSLO-3_Skala_Soziale_Unterstützung_` >= 9 & `OSLO-3_Skala_Soziale_Unterstützung_` < 12 ~ "Mittel",
-      TRUE ~ "Niedrig"
-    )
-  )
+# SIeht nicht notwendig aus Angst vor collider
+# Create new variables relevant to children under 12
+# data13 <- data12 %>%
+#   mutate(
+#     Durchschnittliches_Einkommen = rowMeans(select(., starts_with("Äquivalenzeinkommen_")), na.rm = TRUE),
+#     Alter_Kategorie = case_when(
+#       Alter_der_Person_in_Jahren_ < 6 ~ "Kleinkind",
+#       Alter_der_Person_in_Jahren_ >= 6 & Alter_der_Person_in_Jahren_ < 12 ~ "Kind"
+#     ),
+#     Relative_Entfernung_ÖPNV = ifelse(`Entfernung_zur_nächsten_ÖPNV-Haltest._(in_Metern)_` < 500, "Nah", "Weit"),
+#     Kinder_pro_Zimmer = Anzahl_Kinder / Anzahl_Kinderzimmer_,
+#     Soziale_Unterstützung_Kategorie = case_when(
+#       `OSLO-3_Skala_Soziale_Unterstützung_` >= 12 ~ "Hoch",
+#       `OSLO-3_Skala_Soziale_Unterstützung_` >= 9 & `OSLO-3_Skala_Soziale_Unterstützung_` < 12 ~ "Mittel",
+#       TRUE ~ "Niedrig"
+#     )
+#   )
 
-# Filter the data
-#data13 <- data13 %>%
-#  filter(Alter_Kategorie == "Kind")
+# # Filter the data
+# data13 <- data13 %>%
+#   filter(Alter_Kategorie == "Kind")
+
 
 ###################
 
 # lasse alle irrelevanten variablen raus
-nzv <- nearZeroVar(data13, saveMetrics = TRUE)
-data14 <- data13[, !nzv$nzv]
+nzv <- nearZeroVar(data12, saveMetrics = TRUE)
+data14 <- data12[, !nzv$nzv]
 
-# die sind hoch korreliert vor allem sind ja ja schon in durchschnittseinkommen
-#beruf hat einfach zu viele variablen
+
+# Top-N Kategorien identifizieren
+top_n <- 10
+top_berufe_counts <- sort(table(trimws(data14$`Aktueller_oder_letzter_Beruf_Mutter_(ISCO-08)_`)), decreasing = TRUE)
+top_berufe <- names(top_berufe_counts[1:top_n])
+
+# Neue Spalte hinzufügen und Kategorien zuweisen
+data14$`Aktueller_oder_letzter_Beruf_Mutter_(ISCO-08)_` <- trimws(data14$`Aktueller_oder_letzter_Beruf_Mutter_(ISCO-08)_`)
+data14$TopKategorie <- ifelse(data14$`Aktueller_oder_letzter_Beruf_Mutter_(ISCO-08)_` %in% top_berufe, 
+                              data14$`Aktueller_oder_letzter_Beruf_Mutter_(ISCO-08)_`, "Sonstige")
+
+
+# Faktorspalte erstellen mit den dynamisch erstellten Labels
+data14$TopKategorie_Mutter <- factor(data14$TopKategorie, levels = c(top_berufe, "Sonstige"))
+
+
+## vater
+# Top-N Kategorien identifizieren
+top_berufe_counts <- sort(table(trimws(data14$`Aktueller_oder_letzter_Beruf_Vater_(ISCO-08)_`)), decreasing = TRUE)
+top_berufe <- names(top_berufe_counts[1:top_n])
+
+# Neue Spalte hinzufügen und Kategorien zuweisen
+data14$`Aktueller_oder_letzter_Beruf_Vater_(ISCO-08)_` <- trimws(data14$`Aktueller_oder_letzter_Beruf_Vater_(ISCO-08)_`)
+data14$TopKategorie <- ifelse(data14$`Aktueller_oder_letzter_Beruf_Vater_(ISCO-08)_` %in% top_berufe, 
+                              data14$`Aktueller_oder_letzter_Beruf_Vater_(ISCO-08)_`, "Sonstige")
+
+# Faktorspalte erstellen mit den dynamisch erstellten Labels
+data14$TopKategorie_Vater <- factor(data14$TopKategorie, levels = c(top_berufe, "Sonstige"))
+
+# raus mit den alten variablen
 data_final <- data14 %>%
-  select(!c("Äquivalenzeinkommen_Untergrenze_",
-            "Äquivalenzeinkommen_Intervallmitte_",
-            "Äquivalenzeinkommen_Obergrenze_",
-            help,
+  select(!c(`Aktueller_oder_letzter_Beruf_Vater_(ISCO-08)_`,
             `Aktueller_oder_letzter_Beruf_Mutter_(ISCO-08)_`,
-            `Aktueller_oder_letzter_Beruf_Vater_(ISCO-08)_` ))
+            TopKategorie,
+            help))
 
 # verwndle character zu factoren um
 data_final_1 <- data_final %>%
@@ -247,15 +278,80 @@ data_final_clean_2 <- data_final_clean %>%
 # Ensure the response variable is a factor for classification
 data_final_clean_2$dep_child <- as.factor(data_final_clean_2$dep_child)
 
+
+### collider
+
+# Function to calculate Cramer's V for categorical variables
+cramersV <- function(x, y) {
+  tbl <- table(x, y)
+  chi2 <- chisq.test(tbl)$statistic
+  n <- sum(tbl)
+  phi2 <- chi2 / n
+  k <- min(dim(tbl)) - 1
+  return(sqrt(phi2 / k))
+}
+
+# Function to calculate correlations between numeric variables and dep_child
+num_correlations <- function(data, dep_var) {
+  cor_results <- data.frame(Variable = character(), Correlation = numeric(), stringsAsFactors = FALSE)
+  numeric_vars <- data %>% select(where(is.numeric))
+  
+  for (var in colnames(numeric_vars)) {
+    cor_value <- cor(numeric_vars[[var]], as.numeric(as.factor(data[[dep_var]])), use = "complete.obs")
+    cor_results <- rbind(cor_results, data.frame(Variable = var, Correlation = cor_value, stringsAsFactors = FALSE))
+  }
+  
+  return(cor_results)
+}
+
+# Function to calculate Cramer's V for categorical variables and dep_child
+cat_correlations <- function(data, dep_var) {
+  cat_results <- data.frame(Variable = character(), CramersV = numeric(), stringsAsFactors = FALSE)
+  cat_vars <- data %>% select(where(is.factor))
+  
+  for (var in colnames(cat_vars)) {
+    cramer_value <- cramersV(cat_vars[[var]], data[[dep_var]])
+    cat_results <- rbind(cat_results, data.frame(Variable = var, CramersV = cramer_value, stringsAsFactors = FALSE))
+  }
+  
+  return(cat_results)
+}
+
+# Calculate correlations
+numeric_corrs <- num_correlations(data_final_clean_2, "dep_child")
+categorical_corrs <- cat_correlations(data_final_clean_2, "dep_child")
+
+# Combine and filter results to identify potential colliders
+threshold <- 0.3
+
+# Ensure both data frames have the same column names
+numeric_corrs <- numeric_corrs %>% rename(Score = Correlation)
+categorical_corrs <- categorical_corrs %>% rename(Score = CramersV)
+
+potential_colliders <- rbind(
+  numeric_corrs %>% filter(abs(Score) > threshold),
+  categorical_corrs %>% filter(Score > threshold)
+)
+
+
+# Select the variables that are potential colliders
+collider_vars <- potential_colliders$Variable
+collider_vars <- setdiff(collider_vars, "dep_child")
+
+# Remove collider variables from the dataset
+data_final_clean_2_1 <- data_final_clean_2 %>% select(-all_of(collider_vars))
+
+
+###
+
 # Entfernen oder Ersetzen von NaN-Werten
-data_final_clean_3 <- data_final_clean_2%>% 
+data_final_clean_3 <- data_final_clean_2_1 %>% 
   mutate(across(where(is.numeric), ~ ifelse(is.nan(.), median(., na.rm = TRUE), .)))
 
 # Entfernen oder Ersetzen von Inf-Werten
 data_final_clean_4 <- data_final_clean_3 %>% 
   mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
-
-
+###########
 
 remove_highly_correlated_categorical <- function(data, threshold = 0.05) {
   # Alle Spaltennamen des Datensatzes
@@ -331,26 +427,84 @@ remove_highly_correlated_numerical <- function(data, threshold = 0.9) {
 # Beispielnutzung der Funktion
 result2 <- remove_highly_correlated_numerical(result)
 
+########check for multikollinearity
+
+##################
+
+# Umwandlung der Faktoren in numerische Werte und Ersetzen von NAs
+data <- replace_na_values(result2)
+# Entfernen oder Ersetzen von NaN-Werten
+data<- data%>% 
+  mutate(across(where(is.numeric), ~ ifelse(is.nan(.), median(., na.rm = TRUE), .)))
+
+# Entfernen oder Ersetzen von Inf-Werten
+data <- data %>% 
+  mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
+
+# Durchschnittliche Beziehungsqualität
+data <- data %>%
+  rowwise() %>%
+  mutate(Durchschnitt_Beziehungsqualitaet = mean(as.numeric(c_across(starts_with("Qualität_Beziehung_"))), na.rm = TRUE)) %>%
+  ungroup()
+
+# Migrationshintergrund - hier fassen wir Geburtsland-Variablen zusammen
+data <- data %>%
+  mutate(Migrationshintergrund = ifelse(Geburtsland_Mutter_ == Geburtsland_Vater_, as.character(Geburtsland_Mutter_), "gemischt"))
+
+# Familienklima-Index
+data <- data %>%
+  rowwise() %>%
+  mutate(Familienklima_Index = mean(as.numeric(c_across(starts_with("Familienklima."))), na.rm = TRUE)) %>%
+  ungroup()
+
+# Entfernen der ursprünglichen Einzelvariablen, die zusammengefasst wurden
+data <- data %>%
+  select(-starts_with("Qualität_Beziehung_"), 
+         -starts_with("Geburtsland_"),
+         -starts_with("Familienklima."))
+
+
+# Überprüfen auf Multikolinearität
+vif_values <- vif(lm(as.numeric(dep_child) ~ ., data = data)) # 'dep_child' als abhängige Variable
+
+table <- data.frame(vif_values)
+
+
+# Filtern der Zeilen mit GVIF^(1/(2*Df)) > 2
+filtered_table <- table %>% filter(`GVIF..1..2.Df..` > 5)
+
+# Hinzufügen der Rownames als eine eigene Spalte
+filtered_table  <- filtered_table  %>%
+  tibble::rownames_to_column(var = "Variable")
+
+
+data <- data %>% select(-all_of(filtered_table$Variable))
 
 ### random forest
 # Set seed for reproducibility
 set.seed(123)
 
-result2$HHLFD_ <- NULL
+data$HHLFD_ <- NULL
+data$dep_child <- as.factor(data$dep_child)
+
+# data <- data %>%
+#   filter(Alter_der_Person_in_Jahren_ > 6 & Alter_der_Person_in_Jahren_ < 12)
 
 # Split the data into training and testing sets
-trainIndex <- createDataPartition(result2$dep_child, p = .8,
+trainIndex <- createDataPartition(data$dep_child, p = .8,
                                   list = FALSE,
                                   times = 1)
 
-data_train <- result2[trainIndex, ]
-data_test <- result2[-trainIndex, ]
+data_train <- data[trainIndex, ]
+data_test <- data[-trainIndex, ]
 
 # Train the Random Forest model
+#getuned HPO
 rf_model <- randomForest(dep_child ~ ., data = data_train,
                          importance = TRUE,
-                         ntree = 500)
-
+                         ntree = 100,
+                         mtry = 20,
+                         nodesize = 1)
 
 # Vorhersagen und Bewertung
 predicted_classes <- predict(rf_model, data_test)
@@ -359,3 +513,5 @@ print(conf_matrix)
 
 # Plot der Variable Importance
 varImpPlot(rf_model)
+
+
