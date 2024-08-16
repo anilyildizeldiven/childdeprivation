@@ -214,13 +214,13 @@ data10_clean <- data10[
 ]
 table(data10_clean$Migrationshintergrund_analog_zum_NEPS_)
 # Beispiel für eine Aggregation der Generationen
-data10_clean$Migrationshintergrund_analog_zum_NEPS_ <- factor(ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("1,0 Generation", "1,5 Generation"), 
+data10_clean$Migrationshintergrund_analog_zum_NEPS_ <- as.numeric(factor(ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("1,0 Generation", "1,5 Generation"), 
                                                                      "1. Generation",
                                                                      ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("2,0 Generation", "2,25 Generation", "2,5 Generation", "2,75 Generation"),
                                                                             "2. Generation",
                                                                             ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("3,0 Generation", "3,25 Generation", "3,5 Generation", "3,75 Generation"),
                                                                                    "3. Generation", 
-                                                                                   "kein Migrationshintergrund"))))
+                                                                                   "kein Migrationshintergrund")))))
 
 table(data10_clean$Gesundheitszustand_)
 data10_clean$Gesundheitszustand_ <- factor(ifelse(data10_clean$Gesundheitszustand_ %in% c("4", "5", "sehr schlecht"), 
@@ -228,10 +228,11 @@ data10_clean$Gesundheitszustand_ <- factor(ifelse(data10_clean$Gesundheitszustan
                                                   as.character(data10_clean$Gesundheitszustand_)))
 
 
-data10_clean$Gesundheitszustand_ <- factor(data10_clean$Gesundheitszustand_, 
-                                           levels = c("sehr gut", "2", "3", "sehr schlecht"))
+data10_clean$Gesundheitszustand_ <- as.numeric(factor(data10_clean$Gesundheitszustand_, 
+                                           levels = c("sehr gut", "2", "3", "sehr schlecht")))
 
 table(data10_clean$`Sprachpraxis_in_Haushalt/Familie_`)
+data10_clean$`Sprachpraxis_in_Haushalt/Familie_`<- as.numeric(factor(data10_clean$`Sprachpraxis_in_Haushalt/Familie_`))
 
 # data10_clean$`Sprachpraxis_in_Haushalt/Familie_` <- factor(ifelse(data10_clean$`Sprachpraxis_in_Haushalt/Familie_` %in% c("Mehrheitlich in einer anderen Sprache", "Ausschließlich in einer anderen Sprache"), 
 #                                                       "Andere Sprache", 
@@ -296,6 +297,8 @@ data10_clean$persönliches_Nettoeinkommen_Mutter_<- as.numeric(as.character(fact
                                                                             NA                      # "möchte ich nicht beantworten" wird als NA kodiert
                                                                  ))))
 
+data10_clean$persönliches_Nettoeinkommen_Mutter_<- as.numeric(factor(data10_clean$persönliches_Nettoeinkommen_Mutter_))
+
 # Erstellen einer neuen numerischen Variable basierend auf den Einkommenskategorien für das Einkommen des Vaters
 data10_clean$persönliches_Nettoeinkommen_Vater_ <- as.numeric(as.character(factor(data10_clean$persönliches_Nettoeinkommen_Vater_, 
                                                                 levels = c("kein persönliches Einkommen", 
@@ -353,8 +356,9 @@ data10_clean$persönliches_Nettoeinkommen_Vater_ <- as.numeric(as.character(fact
                                                                 ))))
 
 
-plot(data10_clean$Äquivalenzeinkommen_Intervallmitte_)
-boxplot(data10_clean$Äquivalenzeinkommen_Intervallmitte_)
+data10_clean$persönliches_Nettoeinkommen_Vater_ <- as.numeric(factor(data10_clean$persönliches_Nettoeinkommen_Vater_))
+
+
 data10_clean$log_Äquivalenzeinkommen <- log(data10_clean$Äquivalenzeinkommen_Intervallmitte_ + 1)
 # Entfernen der ursprünglichen Variable
 data10_clean$Äquivalenzeinkommen_Intervallmitte_ <- NULL
@@ -378,14 +382,14 @@ data10_clean$Familientyp_aggregiert <- factor(ifelse(data10_clean$Familientyp_ %
                                                      as.character(data10_clean$Familientyp_)))
 
 
-
+data10_clean$Familientyp_aggregiert<-as.numeric(factor(data10_clean$Familientyp_aggregiert))
 data10_clean$Familientyp_ <- NULL
 
 # gebäudetypologie fasse je nach strukutureller ähnlichkeit zusammen
 data10_clean$`Berufsausbildung/Studium_Mutter_` <- as.numeric(factor(data10_clean$`Berufsausbildung/Studium_Mutter_` ))
 
 
-# check extrem values
+# check extreme values
 plot(data10_clean$`Entfernung_zur_nächsten_ÖPNV-Haltest._(in_Metern)_`)
 
 table(data10_clean$Socioeconomic_Group_Aggregated)
@@ -395,7 +399,7 @@ str(data10_clean)
 
 
 
-data10_clean$Socioeconomic_Group_Aggregated <- factor(
+data10_clean$Socioeconomic_Group_Aggregated_Mutter <- factor(
   ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
     "11. Higher managerial self-employed", "12. Lower managerial self-employed", 
     "13. Higher managerial employees", "14. Lower managerial employees"),
@@ -441,7 +445,7 @@ data10_clean$Socioeconomic_Group_Aggregated <- factor(
                     )))))))))))
   
 
-data10_clean$Socioeconomic_Group_Aggregated_M<-as.numeric(factor(data10_clean$Socioeconomic_Group_Aggregated))
+data10_clean$Socioeconomic_Group_Aggregated_Mutter<-as.numeric(factor(data10_clean$Socioeconomic_Group_Aggregated_Mutter))
 
 data10_clean$Socioeconomic_Group_Aggregated_Vater <- factor(
   ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
@@ -488,7 +492,7 @@ data10_clean$Socioeconomic_Group_Aggregated_Vater <- factor(
                       as.character(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_`)
                     )))))))))))
   
-data10_clean$Socioeconomic_Group_Aggregated_V<-as.numeric(factor(data10_clean$Socioeconomic_Group_Aggregated))
+data10_clean$Socioeconomic_Group_Aggregated_Vater<-as.numeric(factor(data10_clean$Socioeconomic_Group_Aggregated_Vater))
 
 
 str(data10_clean)
