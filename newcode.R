@@ -198,9 +198,9 @@ str(data10)
 # Umwandlung der Alter-Variable in eine numerische Variable
 data10$Alter_der_Person_in_Jahren_ <- as.numeric(as.character(data10$Alter_der_Person_in_Jahren_))
 
-
+table(data10$Alter_der_Person_in_Jahren_Mutter_)
 # Entfernen der Datensätze mit einem Alter von "0"
-data10 <- data10[data10$Alter_der_Person_in_Jahren_ != 0, ]
+#data10 <- data10[data10$Alter_der_Person_in_Jahren_ != 0, ]
 
 # Umwandlung der Alter-Variable in eine numerische Variable
 data10$Alter_der_Person_in_Jahren_Mutter_ <- as.numeric(as.character(data10$Alter_der_Person_in_Jahren_Mutter_))
@@ -212,7 +212,7 @@ data10_clean <- data10[
   data10$Alter_der_Person_in_Jahren_Mutter_ != 0 & 
     data10$Alter_der_Person_in_Jahren_Vater_ != 0, 
 ]
-
+table(data10_clean$Migrationshintergrund_analog_zum_NEPS_)
 # Beispiel für eine Aggregation der Generationen
 data10_clean$Migrationshintergrund_analog_zum_NEPS_ <- factor(ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("1,0 Generation", "1,5 Generation"), 
                                                                      "1. Generation",
@@ -222,7 +222,7 @@ data10_clean$Migrationshintergrund_analog_zum_NEPS_ <- factor(ifelse(data10_clea
                                                                                    "3. Generation", 
                                                                                    "kein Migrationshintergrund"))))
 
-
+table(data10_clean$Gesundheitszustand_)
 data10_clean$Gesundheitszustand_ <- factor(ifelse(data10_clean$Gesundheitszustand_ %in% c("4", "5", "sehr schlecht"), 
                                                   "sehr schlecht", 
                                                   as.character(data10_clean$Gesundheitszustand_)))
@@ -233,9 +233,9 @@ data10_clean$Gesundheitszustand_ <- factor(data10_clean$Gesundheitszustand_,
 
 table(data10_clean$`Sprachpraxis_in_Haushalt/Familie_`)
 
-data10_clean$`Sprachpraxis_in_Haushalt/Familie_` <- factor(ifelse(data10_clean$`Sprachpraxis_in_Haushalt/Familie_` %in% c("Mehrheitlich in einer anderen Sprache", "Ausschließlich in einer anderen Sprache"), 
-                                                      "Andere Sprache", 
-                                                      as.character(data10_clean$`Sprachpraxis_in_Haushalt/Familie_`)))
+# data10_clean$`Sprachpraxis_in_Haushalt/Familie_` <- factor(ifelse(data10_clean$`Sprachpraxis_in_Haushalt/Familie_` %in% c("Mehrheitlich in einer anderen Sprache", "Ausschließlich in einer anderen Sprache"), 
+#                                                       "Andere Sprache", 
+#                                                       as.character(data10_clean$`Sprachpraxis_in_Haushalt/Familie_`)))
 
 str(data10_clean)
 
@@ -353,13 +353,13 @@ data10_clean$persönliches_Nettoeinkommen_Vater_ <- as.numeric(as.character(fact
                                                                 ))))
 
 
-
-
+plot(data10_clean$Äquivalenzeinkommen_Intervallmitte_)
+boxplot(data10_clean$Äquivalenzeinkommen_Intervallmitte_)
 data10_clean$log_Äquivalenzeinkommen <- log(data10_clean$Äquivalenzeinkommen_Intervallmitte_ + 1)
 # Entfernen der ursprünglichen Variable
 data10_clean$Äquivalenzeinkommen_Intervallmitte_ <- NULL
 
-
+table(data10_clean$Familientyp_)
 
 data10_clean <- data10_clean[data10_clean$Familientyp_ %in% c("1 Elternteil mit Kind(ern) und weiteren Personen", 
                                                               "Elternpaar mit Kind(ern)", 
@@ -379,14 +379,123 @@ data10_clean$Familientyp_aggregiert <- factor(ifelse(data10_clean$Familientyp_ %
 
 
 
-
-table(data10_clean$Gebäudetypologie_in_Klassen_ )
 data10_clean$Familientyp_ <- NULL
 
+# gebäudetypologie fasse je nach strukutureller ähnlichkeit zusammen
+data10_clean$`Berufsausbildung/Studium_Mutter_` <- as.numeric(factor(data10_clean$`Berufsausbildung/Studium_Mutter_` ))
+
+
+# check extrem values
+plot(data10_clean$`Entfernung_zur_nächsten_ÖPNV-Haltest._(in_Metern)_`)
+
+table(data10_clean$Socioeconomic_Group_Aggregated)
+
+table(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_`)
 str(data10_clean)
 
 
 
+data10_clean$Socioeconomic_Group_Aggregated <- factor(
+  ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
+    "11. Higher managerial self-employed", "12. Lower managerial self-employed", 
+    "13. Higher managerial employees", "14. Lower managerial employees"),
+    "Managerial Occupations",
+    ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
+      "21. Science, engineering and information and communications technology (ICT) professionals", 
+      "22. Health professionals", "23. Business and administration professionals", 
+      "24. Legal, social and cultural professionals", "25. Teaching professionals"),
+      "Professional Occupations",
+      ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
+        "31. Science, engineering and ICT technicians and associated professionals", 
+        "32. Health associate professionals", "33. Business and administration associate professionals", 
+        "34. Legal, social and cultural associate professionals"),
+        "Technicians and Associate Professionals",
+        ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
+          "51. General and numerical clerks and other clerical support employees", "52. Customer services clerks"),
+          "Clerical Occupations",
+          ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
+            "71. Personal services and sales employees", "72. Blue collar employees and food preparation assistants in elementary occupations",
+            "73. Cleaners and helpers and services employees in elementary occupations"),
+            "Service and Sales Occupations",
+            ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
+              "61. Building and related trade employees", "62. Food processing, wood working, garment employees", 
+              "63. Metal, machinery, handicraft, printing, electrical and electronic trades employees", 
+              "64. Stationary plant and machine operators and assemblers", "65. Drivers"),
+              "Skilled Trades Occupations",
+              ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
+                "41. Skilled agricultural self-employed workers", "42. Technicians, clerical support, services and sales self-employed workers", 
+                "43. Craft and related trades self-employed workers"),
+                "Self-employed Workers",
+                ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
+                  "35. Non-commissioned armed forces officers", "54. Armed forced occupations and protective service employees"),
+                  "Armed Forces and Protective Services",
+                  ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
+                    "81. Retired Managers", "82. Retired professionals", "83. Retired technicians and associate professionals", 
+                    "84. Retired small entrepreneurs", "85. Retired skilled white collars", "86. Retired skilled blue-collars", 
+                    "87. Retired less skilled workers", "88. Other inactive aged 65 or more"),
+                    "Retired and Inactive",
+                    ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
+                      "92. Permanently disabled", "93. Unemployed not elsewhere classified", "94. Other inactive aged less than 65 years", "91. Students"),
+                      "Other Inactive Groups",
+                      as.character(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_`)
+                    )))))))))))
+  
+
+data10_clean$Socioeconomic_Group_Aggregated_M<-as.numeric(factor(data10_clean$Socioeconomic_Group_Aggregated))
+
+data10_clean$Socioeconomic_Group_Aggregated_Vater <- factor(
+  ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
+    "11. Higher managerial self-employed", "12. Lower managerial self-employed", 
+    "13. Higher managerial employees", "14. Lower managerial employees"),
+    "Managerial Occupations",
+    ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
+      "21. Science, engineering and information and communications technology (ICT) professionals", 
+      "22. Health professionals", "23. Business and administration professionals", 
+      "24. Legal, social and cultural professionals", "25. Teaching professionals"),
+      "Professional Occupations",
+      ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
+        "31. Science, engineering and ICT technicians and associated professionals", 
+        "32. Health associate professionals", "33. Business and administration associate professionals", 
+        "34. Legal, social and cultural associate professionals"),
+        "Technicians and Associate Professionals",
+        ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
+          "51. General and numerical clerks and other clerical support employees", "52. Customer services clerks"),
+          "Clerical Occupations",
+          ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
+            "71. Personal services and sales employees", "72. Blue collar employees and food preparation assistants in elementary occupations",
+            "73. Cleaners and helpers and services employees in elementary occupations"),
+            "Service and Sales Occupations",
+            ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
+              "61. Building and related trade employees", "62. Food processing, wood working, garment employees", 
+              "63. Metal, machinery, handicraft, printing, electrical and electronic trades employees", 
+              "64. Stationary plant and machine operators and assemblers", "65. Drivers"),
+              "Skilled Trades Occupations",
+              ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
+                "41. Skilled agricultural self-employed workers", "42. Technicians, clerical support, services and sales self-employed workers", 
+                "43. Craft and related trades self-employed workers"),
+                "Self-employed Workers",
+                ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
+                  "54. Armed forced occupations and protective service employees"),
+                  "Armed Forces and Protective Services",
+                  ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
+                    "81. Retired Managers", "82. Retired professionals", "83. Retired technicians and associate professionals", 
+                    "84. Retired small entrepreneurs", "85. Retired skilled white collars", "86. Retired skilled blue-collars", 
+                    "87. Retired less skilled workers", "88. Other inactive aged 65 or more"),
+                    "Retired and Inactive",
+                    ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
+                      "92. Permanently disabled", "93. Unemployed not elsewhere classified", "94. Other inactive aged less than 65 years", "91. Students"),
+                      "Other Inactive Groups",
+                      as.character(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_`)
+                    )))))))))))
+  
+data10_clean$Socioeconomic_Group_Aggregated_V<-as.numeric(factor(data10_clean$Socioeconomic_Group_Aggregated))
+
+
+str(data10_clean)
+data10_clean$vereinbarte_Arbeitszeit_Mutter_ <- as.numeric(factor(data10_clean$vereinbarte_Arbeitszeit_Mutter_))
+plot(data10_clean$vereinbarte_Arbeitszeit_Mutter_)
+
+data10_clean$vereinbarte_Arbeitszeit_Vater_ <- as.numeric(factor(data10_clean$vereinbarte_Arbeitszeit_Vater_))
 
 # Assume data10 is your dataset filtered for children under 12
 
