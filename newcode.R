@@ -352,6 +352,12 @@ data10_clean$log_Äquivalenzeinkommen <- log(data10_clean$Äquivalenzeinkommen_I
 data10_clean$Äquivalenzeinkommen_Intervallmitte_ <- NULL
 
 
+# Geschlecht
+data10_clean <- data10_clean[data10_clean$Geschlecht_ != "keines der beiden oben genannten", ]
+
+# Droppen des Faktors "keines der beiden oben genannten" aus den Levels
+data10_clean$Geschlecht_ <- droplevels(data10_clean$Geschlecht_)
+
 # Familientyp_
 data10_clean <- data10_clean[data10_clean$Familientyp_ %in% c("1 Elternteil mit Kind(ern) und weiteren Personen", 
                                                               "Elternpaar mit Kind(ern)", 
@@ -589,6 +595,32 @@ data10_clean$Aktivitätsstatus_Muter_ <- NULL
 data10_clean$Aktivitätsstatus_Vater_Aggregated <- as.numeric(factor(data10_clean$ISCED_2011_Vater_ordinal))
 data10_clean$Aktivitätsstatus_Mutter_Aggregated <- as.numeric(factor(data10_clean$ISCED_2011_Mutter_ordinal))
 
+
+# Aggregation für Aktivitätsstatus_Mutter_
+data10_clean$Aktivitätsstatus_Mutter_Aggregiert <- factor(
+  ifelse(data10_clean$Aktivitätsstatus_Mutter_ %in% c("Besuch einer Schule, um einen allgemeinbildenden",
+                                                      "in beruflicher Ausbildung, Studium, Umschulung oder",
+                                                      "arbeitslos gemeldet     d.h. mit oder ohne finanzielle"),
+         "Nicht erwerbstätig", 
+         data10_clean$Aktivitätsstatus_Mutter_)
+)
+
+# Aggregation für Art_aktuelle_Ausbildung_Mutter_
+data10_clean$Art_aktuelle_Ausbildung_Mutter_Aggregiert <- factor(
+  ifelse(data10_clean$Art_aktuelle_Ausbildung_Mutter_ %in% c("ein Berufsvorbereitungs- oder Berufsgrundbildungsjahr o.ä.",
+                                                             "eine Lehre (betriebliche Ausbildung)",
+                                                             "eine vollzeitschulische Berufsausbildung",
+                                                             "ein Referendariat, Anerkennungsjahr, Volontariat  oder eine",
+                                                             "eine Umschulung",
+                                                             "eine sonstige Ausbildung"),
+         "Andere Ausbildung", 
+         "ein Studium an einer Fachhochschule oder Universität etc.")
+)
+
+
+data10_clean$Art_aktuelle_Ausbildung_Mutter_ <- NULL
+data10_clean$Aktivitätsstatus_Mutter_ <- NULL
+
 # Calculate the number of children per household
 data12 <- data10_clean %>%
   group_by(HHLFD_) %>%
@@ -613,7 +645,7 @@ clean_names <- function(df) {
 
 # Apply the function to clean column names
 data_final_clean <- clean_names(data_final_2)
-str(data_final_clean)
+
 
 # Function to calculate Cramer's V for categorical variables
 cramersV <- function(x, y, use_fisher = FALSE) {
@@ -790,8 +822,6 @@ result2 <- remove_highly_correlated_numerical(result)
 
 ########check for multikollinearity
 
-
-
 # Entfernen oder Ersetzen von NaN-Werten
 data<- result2%>% 
   mutate(across(where(is.numeric), ~ ifelse(is.nan(.), median(., na.rm = TRUE), .)))
@@ -801,16 +831,35 @@ data <- data %>%
   mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
 
 
+# Berechne die VIF-Werte
 vif_values <- vif(lm(as.numeric(dep_child) ~ ., data = data))
 
-# Konvertiere VIF-Werte in ein DataFrame
-table <- data.frame(Variable = rownames(vif_values), GVIF = vif_values[, "GVIF"], Df = vif_values[, "Df"], GVIF_norm = vif_values[, "GVIF^(1/(2*Df))"])
+# Wenn die VIF-Werte mehrdimensional sind (GVIF), konvertiere sie in ein DataFrame
+if (is.matrix(vif_values)) {
+  table <- data.frame(Variable = rownames(vif_values), 
+                      GVIF = vif_values[, "GVIF"], 
+                      Df = vif_values[, "Df"], 
+                      GVIF_norm = vif_values[, "GVIF"]^(1/(2*vif_values[, "Df"])))
+  
+  # Filtern der Zeilen mit GVIF^(1/(2*Df)) > 5
+  filtered_table <- table %>% filter(GVIF_norm > 5)
+  
+  # Entfernen der Variablen mit hohem GVIF^(1/(2*Df))
+  data <- data %>% select(-all_of(filtered_table$Variable))
+  
+} else {
+  # Wenn die VIF-Werte eindimensional sind, verwende sie direkt
+  table <- data.frame(Variable = names(vif_values), VIF = vif_values)
+  
+  # Filtern der Zeilen mit VIF > 5
+  filtered_table <- table %>% filter(VIF > 5)
+  
+  # Entfernen der Variablen mit hohem VIF
+  data <- data %>% select(-all_of(filtered_table$Variable))
+}
 
-# Filtern der Zeilen mit GVIF^(1/(2*Df)) > 5
-filtered_table <- table %>% filter(GVIF_norm > 5)
-
-# Entfernen der Variablen mit hohem GVIF^(1/(2*Df))
-data <- data %>% select(-all_of(filtered_table$Variable))
+# Ausgabe anzeigen
+print(filtered_table)
 
 
 ### random forest
@@ -821,28 +870,25 @@ data$HHLFD_ <- NULL
 data$dep_child <- factor(data$dep_child, levels = c("1", "2"), labels = c("0", "1"))
 
 
-# data <- data %>%
-#   filter(Alter_der_Person_in_Jahren_ > 6 & Alter_der_Person_in_Jahren_ < 12)
-
 # Split the data into training and testing sets
 # trainIndex <- createDataPartition(data$dep_child, p = .8, list = FALSE, times = 1)
 # data_train <- data[trainIndex, ]
 # data_test <- data[-trainIndex, ]
-
-
+# 
+# 
 # set.seed(123)
 # # Apply Random Oversampling
 # oversample <- upSample(x = data_train[, -which(names(data_train) == "dep_child")],
-#                        y = data_train$dep_child)
+#                         y = data_train$dep_child)
 # 
 # # Train the Random Forest model with the oversampled data
-# rf_model <- randomForest(Class ~ ., data = oversample, importance = TRUE, ntree = 200, nodesize = 1, mtry=8)
-# 
-# # Make predictions and evaluate the model
+#  rf_model <- randomForest(Class ~ ., data = oversample, importance = TRUE, ntree = 200, nodesize = 1, mtry=8)
+# #
+# # # Make predictions and evaluate the model
 # predicted_classes <- predict(rf_model, data_test)
 # conf_matrix <- confusionMatrix(predicted_classes, data_test$dep_child)
 # print(conf_matrix)
-# 
+#
 # # # Plot Variable Importance
 # varImpPlot(rf_model)
 
@@ -855,7 +901,7 @@ data_train <- data[trainIndex, ]
 data_test <- data[-trainIndex, ]
 
 # Train the Random Forest model without oversampling
-rf_model <- randomForest(dep_child ~ ., data = data_train, importance = TRUE, ntree = 200, nodesize = 1, mtry = 2)
+rf_model <- randomForest(dep_child ~ ., data = data_train, importance = TRUE, ntree = 300, nodesize = 1, mtry = 2)
 
 # Make predictions and evaluate the model
 predicted_classes <- predict(rf_model, data_test)
