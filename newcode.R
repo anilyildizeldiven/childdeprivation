@@ -351,7 +351,7 @@ data10_clean$log_Äquivalenzeinkommen <- log(data10_clean$Äquivalenzeinkommen_I
 # Entfernen der ursprünglichen Variable
 data10_clean$Äquivalenzeinkommen_Intervallmitte_ <- NULL
 
-
+str(data10_clean)
 # Geschlecht
 data10_clean <- data10_clean[data10_clean$Geschlecht_ != "keines der beiden oben genannten", ]
 
@@ -621,6 +621,39 @@ data10_clean$Art_aktuelle_Ausbildung_Mutter_Aggregiert <- factor(
 data10_clean$Art_aktuelle_Ausbildung_Mutter_ <- NULL
 data10_clean$Aktivitätsstatus_Mutter_ <- NULL
 
+
+
+##### Interaktionsvariablen !!!
+
+# Erstellen von Interaktionsvariablen
+
+# 1. Region (east) * Migrationshintergrund_analog_zum_NEPS_
+# data10_clean <- data10_clean %>%
+#   mutate(Interaktion_east_Migrationshintergrund = as.numeric(east) * Migrationshintergrund_analog_zum_NEPS_)
+# 
+# # 2. Gesundheitszustand_ * Anzahl_Personen_im_Haushalt_
+# data10_clean <- data10_clean %>%
+#   mutate(Interaktion_Gesundheitszustand_Anzahl_Personen = Gesundheitszustand_ * Anzahl_Personen_im_Haushalt_)
+# 
+# # 3. ISCED_2011_Mutter_ordinal * persönliches_Nettoeinkommen_Mutter_
+# data10_clean <- data10_clean %>%
+#   mutate(Interaktion_ISCED_Mutter_Einkommen = ISCED_2011_Mutter_ordinal * persönliches_Nettoeinkommen_Mutter_)
+# 
+# # 4. ÖPNV_Distance_Binned * log_Äquivalenzeinkommen
+# data10_clean <- data10_clean %>%
+#   mutate(Interaktion_ÖPNV_Äquivalenzeinkommen = as.numeric(ÖPNV_Distance_Binned) * log_Äquivalenzeinkommen)
+# 
+# # 5. Geschlecht_ * Socioeconomic_Group_Aggregated_Mutter
+# data10_clean <- data10_clean %>%
+#   mutate(Interaktion_Geschlecht_Socioeconomic_Mutter = as.numeric(Geschlecht_) * Socioeconomic_Group_Aggregated_Mutter)
+
+# Überprüfen der ersten Zeilen des erweiterten Datensatzes
+
+
+
+
+
+#######
 # Calculate the number of children per household
 data12 <- data10_clean %>%
   group_by(HHLFD_) %>%
@@ -859,7 +892,7 @@ if (is.matrix(vif_values)) {
 }
 
 # Ausgabe anzeigen
-print(filtered_table)
+
 
 
 ### random forest
@@ -870,48 +903,36 @@ data$HHLFD_ <- NULL
 data$dep_child <- factor(data$dep_child, levels = c("1", "2"), labels = c("0", "1"))
 
 
-# Split the data into training and testing sets
-# trainIndex <- createDataPartition(data$dep_child, p = .8, list = FALSE, times = 1)
-# data_train <- data[trainIndex, ]
-# data_test <- data[-trainIndex, ]
-# 
-# 
-# set.seed(123)
-# # Apply Random Oversampling
-# oversample <- upSample(x = data_train[, -which(names(data_train) == "dep_child")],
-#                         y = data_train$dep_child)
-# 
-# # Train the Random Forest model with the oversampled data
-#  rf_model <- randomForest(Class ~ ., data = oversample, importance = TRUE, ntree = 200, nodesize = 1, mtry=8)
-# #
-# # # Make predictions and evaluate the model
-# predicted_classes <- predict(rf_model, data_test)
-# conf_matrix <- confusionMatrix(predicted_classes, data_test$dep_child)
-# print(conf_matrix)
-#
-# # # Plot Variable Importance
-# varImpPlot(rf_model)
-
-# Split the data into training and testing sets
+#Split the data into training and testing sets
 trainIndex <- createDataPartition(data$dep_child, p = .8, list = FALSE, times = 1)
 data_train <- data[trainIndex, ]
 data_test <- data[-trainIndex, ]
 
-data_train <- data[trainIndex, ]
-data_test <- data[-trainIndex, ]
+# Berechne die Klassenhäufigkeiten
+class_counts <- table(data_train$dep_child)
 
-# Train the Random Forest model without oversampling
-rf_model <- randomForest(dep_child ~ ., data = data_train, importance = TRUE, ntree = 300, nodesize = 1, mtry = 2)
+# Berechne die Gewichte als invers proportional zur Häufigkeit
+class_weights <- class_counts[1] / class_counts
 
-# Make predictions and evaluate the model
+# Trainiere das Random Forest Modell mit classwt
+set.seed(123)
+rf_model <- randomForest(
+  dep_child ~ .,
+  data = data_train,
+  importance = TRUE,
+  ntree = 200,
+  nodesize = 1,
+  mtry = 2,
+  classwt = as.numeric(class_weights)
+)
+
+# Vorhersagen und Evaluierung des Modells
 predicted_classes <- predict(rf_model, data_test)
 conf_matrix <- confusionMatrix(predicted_classes, data_test$dep_child, positive = "1")
 print(conf_matrix)
 
-# Plot Variable Importance
+# Variable Importance Plot
 varImpPlot(rf_model)
 
-table(data_train$dep_child)
-table(data_test$dep_child)
 
-str(data)
+
