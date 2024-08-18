@@ -589,7 +589,7 @@ data10_clean$Aktivitätsstatus_Muter_ <- NULL
 data10_clean$Aktivitätsstatus_Vater_Aggregated <- as.numeric(factor(data10_clean$ISCED_2011_Vater_ordinal))
 data10_clean$Aktivitätsstatus_Mutter_Aggregated <- as.numeric(factor(data10_clean$ISCED_2011_Mutter_ordinal))
 
-# Calculadata10# Calculate the number of children per household
+# Calculate the number of children per household
 data12 <- data10_clean %>%
   group_by(HHLFD_) %>%
   mutate(
@@ -613,17 +613,32 @@ clean_names <- function(df) {
 
 # Apply the function to clean column names
 data_final_clean <- clean_names(data_final_2)
-
-### collider managing
+str(data_final_clean)
 
 # Function to calculate Cramer's V for categorical variables
-cramersV <- function(x, y) {
+cramersV <- function(x, y, use_fisher = FALSE) {
   tbl <- table(x, y)
-  chi2 <- chisq.test(tbl)$statistic
-  n <- sum(tbl)
-  phi2 <- chi2 / n
-  k <- min(dim(tbl)) - 1
-  return(sqrt(phi2 / k))
+  
+  # If all counts are > 5, use Chi-squared test
+  if (!use_fisher && all(tbl > 5)) {
+    chi2 <- chisq.test(tbl, simulate.p.value = TRUE)$statistic
+    n <- sum(tbl)
+    phi2 <- chi2 / n
+    k <- min(dim(tbl)) - 1
+    return(sqrt(phi2 / k))
+  } else {
+    # Fall back to Fisher's test with simulated p-values if necessary
+    if (min(dim(tbl)) == 2) {
+      p_val <- fisher.test(tbl, simulate.p.value = TRUE)$p.value
+      if (p_val < 0.05) {
+        return(1)  # Strong association
+      } else {
+        return(0)  # Weak or no association
+      }
+    } else {
+      return(NA)  # Skip Fisher's test on larger tables
+    }
+  }
 }
 
 # Function to calculate correlations between numeric variables and dep_child
@@ -640,13 +655,15 @@ num_correlations <- function(data, dep_var) {
 }
 
 # Function to calculate Cramer's V for categorical variables and dep_child
-cat_correlations <- function(data, dep_var) {
+cat_correlations <- function(data, dep_var, use_fisher = FALSE) {
   cat_results <- data.frame(Variable = character(), CramersV = numeric(), stringsAsFactors = FALSE)
   cat_vars <- data %>% select(where(is.factor))
   
   for (var in colnames(cat_vars)) {
-    cramer_value <- cramersV(cat_vars[[var]], data[[dep_var]])
-    cat_results <- rbind(cat_results, data.frame(Variable = var, CramersV = cramer_value, stringsAsFactors = FALSE))
+    cramer_value <- cramersV(cat_vars[[var]], data[[dep_var]], use_fisher)
+    if (!is.na(cramer_value)) {
+      cat_results <- rbind(cat_results, data.frame(Variable = var, CramersV = cramer_value, stringsAsFactors = FALSE))
+    }
   }
   
   return(cat_results)
@@ -657,7 +674,7 @@ numeric_corrs <- num_correlations(data_final_clean, "dep_child")
 categorical_corrs <- cat_correlations(data_final_clean, "dep_child")
 
 # Combine and filter results to identify potential colliders
-threshold <- 0.3
+threshold <- 0.4
 
 # Ensure both data frames have the same column names
 numeric_corrs <- numeric_corrs %>% rename(Score = Correlation)
@@ -668,14 +685,12 @@ potential_colliders <- rbind(
   categorical_corrs %>% filter(Score > threshold)
 )
 
-
 # Select the variables that are potential colliders
 collider_vars <- potential_colliders$Variable
 collider_vars <- setdiff(collider_vars, "dep_child")
 
 # Remove collider variables from the dataset
 data_final_clean <- data_final_clean %>% select(-all_of(collider_vars))
-
 
 ###
 
@@ -690,32 +705,38 @@ data_final_clean_4 <- data_final_clean_3 %>%
 
 ########### remove highly correlated categorical 
 
-nrow(data_final_clean_4)
-str(data_final_clean_4)
 remove_highly_correlated_categorical <- function(data, threshold = 0.05) {
-  # Alle Spaltennamen des Datensatzes
-  cols <- colnames(data)
+  # Identify all categorical columns (factors)
+  categorical_cols <- names(data)[sapply(data, is.factor)]
   
-  # Liste, um zu speichernde Spalten zu speichern
-  to_keep <- cols
+  # List to store columns to keep
+  to_keep <- categorical_cols
   
-  # Doppelte Schleife, um Chi-Quadrat-Tests für alle Spaltenpaare durchzuführen
-  for (i in 1:(length(cols) - 1)) {
-    for (j in (i + 1):length(cols)) {
-      var1 <- cols[i]
-      var2 <- cols[j]
+  # Nested loop to perform Chi-Squared tests for all categorical column pairs
+  for (i in 1:(length(categorical_cols) - 1)) {
+    for (j in (i + 1):length(categorical_cols)) {
+      var1 <- categorical_cols[i]
+      var2 <- categorical_cols[j]
       
-      # Kontingenztabelle erstellen
+      # Create a contingency table
       contingency_table <- table(data[[var1]], data[[var2]])
       
-      # Prüfen, ob die Kontingenztabelle gültig ist
+      # Check if the table is valid
       if (all(contingency_table > 0)) {
-        # Chi-Quadrat-Test durchführen
-        chi_test <- chisq.test(contingency_table)
+        # Perform Chi-Squared test or Fisher's Exact test
+        test <- tryCatch({
+          if (any(contingency_table < 5)) {
+            fisher.test(contingency_table)
+          } else {
+            chisq.test(contingency_table)
+          }
+        }, error = function(e) {
+          list(p.value = NA)  # Return NA for p-value if the test fails
+        })
         
-        # P-Wert prüfen
-        if (!is.na(chi_test$p.value) && chi_test$p.value < threshold) {
-          # Hoch korrelierte Variable entfernen (zweite Variable wird entfernt)
+        # Check the p-value
+        if (!is.na(test$p.value) && test$p.value < threshold) {
+          # Remove the second variable if highly correlated
           if (var2 %in% to_keep && var2 != "dep_child") {
             to_keep <- setdiff(to_keep, var2)
           }
@@ -724,15 +745,16 @@ remove_highly_correlated_categorical <- function(data, threshold = 0.05) {
     }
   }
   
-  # Datensatz mit den verbleibenden Spalten zurückgeben
-  return(data[to_keep])
+  # Combine the kept categorical variables with the non-categorical variables
+  remaining_data <- data[c(to_keep, setdiff(names(data), categorical_cols))]
+  
+  return(remaining_data)
 }
 
-# Beispielnutzung der Funktion
+# Example usage of the function
 result <- remove_highly_correlated_categorical(data_final_clean_4)
 
-
-#############################
+############################# remove highly correlated numerical
 
 remove_highly_correlated_numerical <- function(data, threshold = 0.9) {
   # Nur numerische Spalten auswählen
@@ -779,7 +801,6 @@ data <- data %>%
   mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
 
 
-
 vif_values <- vif(lm(as.numeric(dep_child) ~ ., data = data))
 
 # Konvertiere VIF-Werte in ein DataFrame
@@ -798,7 +819,7 @@ set.seed(123)
 
 data$HHLFD_ <- NULL
 data$dep_child <- factor(data$dep_child, levels = c("1", "2"), labels = c("0", "1"))
-colnames(data)
+
 
 # data <- data %>%
 #   filter(Alter_der_Person_in_Jahren_ > 6 & Alter_der_Person_in_Jahren_ < 12)
