@@ -178,23 +178,10 @@ clean_column_names <- function(df) {
 # Bereinigen von doppelten Spaltennamen in data9
 data9 <- clean_column_names(data_reduced)
 
-# ### variablenumkodeirungen
-# # Beispielhafte Spaltennamen, die konvertiert werden sollen (ersetzen Sie diese durch Ihre tatsächlichen Spaltennamen)
-# columns_to_convert <- c("Pflegebedürftige_Personen_im_Haushalt_","Alter_der_Person_in_Jahren_Mutter_", "Alter_der_Person_in_Jahren_Vater_", "vereinbarte_Arbeitszeit_Mutter_", "vereinbarte_Arbeitszeit_Vater_", "Trennungsjahr_der_Eltern_Mutter_")
-# 
-# # Überprüfen, welche Spalten tatsächlich existieren
-# existing_columns <- intersect(columns_to_convert, colnames(data9))
-
-# Konvertierung nur für existierende Spalten durchführen
-# data10 <- data9 %>%
-#   mutate(across(all_of(existing_columns), ~ as.numeric(as.character(.)))) %>%
-#   mutate(across(all_of(existing_columns), ~ ifelse(is.na(.), 0, .)))
-
 # Alter des Kindes
 data10 <- data9
-str(data10)
 
-
+# Alter_der_Person_in_Jahren + M + V
 # Umwandlung der Alter-Variable in eine numerische Variable
 data10$Alter_der_Person_in_Jahren_ <- as.numeric(as.character(data10$Alter_der_Person_in_Jahren_))
 
@@ -212,8 +199,9 @@ data10_clean <- data10[
   data10$Alter_der_Person_in_Jahren_Mutter_ != 0 & 
     data10$Alter_der_Person_in_Jahren_Vater_ != 0, 
 ]
-table(data10_clean$Migrationshintergrund_analog_zum_NEPS_)
-# Beispiel für eine Aggregation der Generationen
+
+
+# Migrationshintergrund_analog_zum_NEPS
 data10_clean$Migrationshintergrund_analog_zum_NEPS_ <- as.numeric(factor(ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("1,0 Generation", "1,5 Generation"), 
                                                                      "1. Generation",
                                                                      ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("2,0 Generation", "2,25 Generation", "2,5 Generation", "2,75 Generation"),
@@ -222,7 +210,10 @@ data10_clean$Migrationshintergrund_analog_zum_NEPS_ <- as.numeric(factor(ifelse(
                                                                                    "3. Generation", 
                                                                                    "kein Migrationshintergrund")))))
 
-table(data10_clean$Gesundheitszustand_)
+data10_clean$Migrationshintergrund_analog_zum_NEPS_ <- as.numeric(factor(data10_clean$Migrationshintergrund_analog_zum_NEPS_))
+
+
+# Gesundheitszustand_
 data10_clean$Gesundheitszustand_ <- factor(ifelse(data10_clean$Gesundheitszustand_ %in% c("4", "5", "sehr schlecht"), 
                                                   "sehr schlecht", 
                                                   as.character(data10_clean$Gesundheitszustand_)))
@@ -231,16 +222,11 @@ data10_clean$Gesundheitszustand_ <- factor(ifelse(data10_clean$Gesundheitszustan
 data10_clean$Gesundheitszustand_ <- as.numeric(factor(data10_clean$Gesundheitszustand_, 
                                            levels = c("sehr gut", "2", "3", "sehr schlecht")))
 
-table(data10_clean$`Sprachpraxis_in_Haushalt/Familie_`)
+# Sprachpraxis_in_Haushalt/Familie_
 data10_clean$`Sprachpraxis_in_Haushalt/Familie_`<- as.numeric(factor(data10_clean$`Sprachpraxis_in_Haushalt/Familie_`))
 
-# data10_clean$`Sprachpraxis_in_Haushalt/Familie_` <- factor(ifelse(data10_clean$`Sprachpraxis_in_Haushalt/Familie_` %in% c("Mehrheitlich in einer anderen Sprache", "Ausschließlich in einer anderen Sprache"), 
-#                                                       "Andere Sprache", 
-#                                                       as.character(data10_clean$`Sprachpraxis_in_Haushalt/Familie_`)))
 
-str(data10_clean)
-
-
+## persönliches_Nettoeinkommen
 # Erstellen einer neuen numerischen Variable basierend auf den Einkommenskategorien
 data10_clean$persönliches_Nettoeinkommen_Mutter_<- as.numeric(as.character(factor(data10_clean$persönliches_Nettoeinkommen_Mutter_, 
                                                                  levels = c("kein persönliches Einkommen", 
@@ -358,13 +344,15 @@ data10_clean$persönliches_Nettoeinkommen_Vater_ <- as.numeric(as.character(fact
 
 data10_clean$persönliches_Nettoeinkommen_Vater_ <- as.numeric(factor(data10_clean$persönliches_Nettoeinkommen_Vater_))
 
+# Äquivalenzeinkommen_Intervallmitte_
 
 data10_clean$log_Äquivalenzeinkommen <- log(data10_clean$Äquivalenzeinkommen_Intervallmitte_ + 1)
+
 # Entfernen der ursprünglichen Variable
 data10_clean$Äquivalenzeinkommen_Intervallmitte_ <- NULL
 
-table(data10_clean$Familientyp_)
 
+# Familientyp_
 data10_clean <- data10_clean[data10_clean$Familientyp_ %in% c("1 Elternteil mit Kind(ern) und weiteren Personen", 
                                                               "Elternpaar mit Kind(ern)", 
                                                               "Elternpaar mit Kind(ern) und weiteren Personen", 
@@ -385,19 +373,20 @@ data10_clean$Familientyp_aggregiert <- factor(ifelse(data10_clean$Familientyp_ %
 data10_clean$Familientyp_aggregiert<-as.numeric(factor(data10_clean$Familientyp_aggregiert))
 data10_clean$Familientyp_ <- NULL
 
-# gebäudetypologie fasse je nach strukutureller ähnlichkeit zusammen
+# Berufsausbildung/Studium_Mutter_
 data10_clean$`Berufsausbildung/Studium_Mutter_` <- as.numeric(factor(data10_clean$`Berufsausbildung/Studium_Mutter_` ))
 
 
-# check extreme values
-plot(data10_clean$`Entfernung_zur_nächsten_ÖPNV-Haltest._(in_Metern)_`)
+# Entfernung_zur_nächsten_ÖPNV-Haltest
 
-table(data10_clean$Socioeconomic_Group_Aggregated)
+data10_clean$ÖPNV_Distance_Binned <- cut(data10_clean$`Entfernung_zur_nächsten_ÖPNV-Haltest._(in_Metern)_`,
+                                         breaks = c(0, 100, 500, 1000, 2000, Inf),
+                                         labels = c("Very Close", "Close", "Medium", "Far", "Very Far"))
 
-table(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_`)
-str(data10_clean)
+data10_clean$`Entfernung_zur_nächsten_ÖPNV-Haltest._(in_Metern)_` <- NULL
 
 
+# Socioeconomic_Group M and V
 
 data10_clean$Socioeconomic_Group_Aggregated_Mutter <- factor(
   ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
@@ -444,7 +433,7 @@ data10_clean$Socioeconomic_Group_Aggregated_Mutter <- factor(
                       as.character(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_`)
                     )))))))))))
   
-
+data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` <- NULL
 data10_clean$Socioeconomic_Group_Aggregated_Mutter<-as.numeric(factor(data10_clean$Socioeconomic_Group_Aggregated_Mutter))
 
 data10_clean$Socioeconomic_Group_Aggregated_Vater <- factor(
@@ -493,18 +482,115 @@ data10_clean$Socioeconomic_Group_Aggregated_Vater <- factor(
                     )))))))))))
   
 data10_clean$Socioeconomic_Group_Aggregated_Vater<-as.numeric(factor(data10_clean$Socioeconomic_Group_Aggregated_Vater))
+data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` <- NULL
 
 
-str(data10_clean)
+# vereinbarte_Arbeitszeit mutter and vater
 data10_clean$vereinbarte_Arbeitszeit_Mutter_ <- as.numeric(factor(data10_clean$vereinbarte_Arbeitszeit_Mutter_))
-plot(data10_clean$vereinbarte_Arbeitszeit_Mutter_)
 
 data10_clean$vereinbarte_Arbeitszeit_Vater_ <- as.numeric(factor(data10_clean$vereinbarte_Arbeitszeit_Vater_))
 
-# Assume data10 is your dataset filtered for children under 12
+# Gebäudetypologie_in_Klassen_
+
+data10_clean$Gebäudetypologie_aggregiert <- factor(ifelse(data10_clean$Gebäudetypologie_in_Klassen_ %in% c("1a1 freistehendes Ein- bis Zweiparteienhaus, klein", "1b1 freistehendes Ein- bis Zweiparteienhaus, mittel", "1c1 freistehendes Ein- bis Zweiparteienhaus, groß"),
+                                                          "Detached Houses",
+                                                          ifelse(data10_clean$Gebäudetypologie_in_Klassen_ %in% c("1f1 klassische Doppelhaushälfte, klein", "1g1 klassische Doppelhaushälfte, mittel", "1h1 klassische Doppelhaushälfte, groß",
+                                                                                                                  "1j1 Reihenhaus, klein", "1k1 Reihenhaus, mittel", "1l1 Reihenhaus, groß"),
+                                                                 "Semi-Detached & Row Houses",
+                                                                 ifelse(data10_clean$Gebäudetypologie_in_Klassen_ %in% c("2a1 freistehendes Mehrparteienhaus, klein", "2b1 freistehendes Mehrparteienhaus, mittel", "2c1 freistehendes Mehrparteienhaus, groß",
+                                                                                                                         "3b Mehrfamilienkomplex", "3c Hochhaus"),
+                                                                        "Apartment Buildings",
+                                                                        "Special & Non-Residential"))))
+data10_clean$Gebäudetypologie_in_Klassen_ <- NULL
+data10_clean$Gebäudetypologie_aggregiert <- as.numeric(factor(data10_clean$Gebäudetypologie_aggregiert))
+
+#ISCED_2011_Mutter_
+
+# Define the order of the categories
+data10_clean$ISCED_2011_Mutter_ordinal <- factor(data10_clean$ISCED_2011_Mutter_,
+                                                 levels = c("Primarbereich, allgemeinbildend", 
+                                                            "Sekundarbereich I, allgemeinbildend", 
+                                                            "Sekundarbereich II allgemeinbildend", 
+                                                            "Sekundarbereich II berufsbildend", 
+                                                            "Postsekundar nichttertiär, berufsbildend", 
+                                                            "Bachelor oder gleichw. akademisch", 
+                                                            "Bachelor oder gleichw. berufsorientiert", 
+                                                            "Master oder gleichwertig", 
+                                                            "Promotion"),
+                                                 ordered = TRUE)
+
+data10_clean$ISCED_2011_Mutter_ <- NULL
+
+data10_clean$ISCED_2011_Mutter_ordinal <- as.numeric(factor(data10_clean$ISCED_2011_Mutter_ordinal))
+
+# Define the order of the categories for ISCED_2011_Vater_
+data10_clean$ISCED_2011_Vater_ordinal <- factor(data10_clean$ISCED_2011_Vater_,
+                                                levels = c("Primarbereich, allgemeinbildend", 
+                                                           "Sekundarbereich I, allgemeinbildend", 
+                                                           "Sekundarbereich II allgemeinbildend", 
+                                                           "Sekundarbereich II berufsbildend", 
+                                                           "Postsekundar nichttertiär, berufsbildend", 
+                                                           "Bachelor oder gleichw. akademisch", 
+                                                           "Bachelor oder gleichw. berufsorientiert", 
+                                                           "Master oder gleichwertig", 
+                                                           "Promotion"),
+                                                ordered = TRUE)
+
+data10_clean$ISCED_2011_Vater_ordinal <- as.numeric(factor(data10_clean$ISCED_2011_Vater_ordinal))
+
+data10_clean$ISCED_2011_Vater_ <- NULL
+
+
+
+## Aktivitätsstatus_Mutter und Vater
+
+# Aggregating Aktivitätsstatus_Mutter_
+data10_clean$Aktivitätsstatus_Mutter_Aggregated <- factor(
+  data10_clean$Aktivitätsstatus_Mutter_,
+  levels = c(
+    "erwerbstätig     Job, selbständig, Praktikum,", 
+    "Besuch einer Schule, um einen allgemeinbildenden", 
+    "in beruflicher Ausbildung, Studium, Umschulung oder", 
+    "arbeitslos gemeldet     d.h. mit oder ohne finanzielle", 
+    "etwas anderes    wie z.B. Kindererziehung, Elternzeit ohne"
+  ),
+  labels = c(
+    "Employed", 
+    "In Education", 
+    "In Education", 
+    "Unemployed or Other", 
+    "Unemployed or Other"
+  )
+)
+
+# Aggregating Aktivitätsstatus_Vater_
+data10_clean$Aktivitätsstatus_Vater_Aggregated <- factor(
+  data10_clean$Aktivitätsstatus_Vater_,
+  levels = c(
+    "erwerbstätig     Job, selbständig, Praktikum,", 
+    "Besuch einer Schule, um einen allgemeinbildenden", 
+    "in beruflicher Ausbildung, Studium, Umschulung oder", 
+    "arbeitslos gemeldet     d.h. mit oder ohne finanzielle", 
+    "etwas anderes    wie z.B. Kindererziehung, Elternzeit ohne"
+  ),
+  labels = c(
+    "Employed", 
+    "In Education", 
+    "In Education", 
+    "Unemployed or Other", 
+    "Unemployed or Other"
+  )
+)
+
+
+data10_clean$Aktivitätsstatus_Vater_ <- NULL
+data10_clean$Aktivitätsstatus_Muter_ <- NULL
+
+data10_clean$Aktivitätsstatus_Vater_Aggregated <- as.numeric(factor(data10_clean$ISCED_2011_Vater_ordinal))
+data10_clean$Aktivitätsstatus_Mutter_Aggregated <- as.numeric(factor(data10_clean$ISCED_2011_Mutter_ordinal))
 
 # Calculadata10# Calculate the number of children per household
-data12 <- data10 %>%
+data12 <- data10_clean %>%
   group_by(HHLFD_) %>%
   mutate(
     Anzahl_Kinder = n()  # Number of children per household
@@ -517,16 +603,8 @@ data12 <- data10 %>%
 nzv <- nearZeroVar(data12, saveMetrics = TRUE)
 data14 <- data12[, !nzv$nzv]
 
-# str(data14)
-# # verwndle character zu factoren um
-# data_final_1 <- data14 %>%
-#   mutate(across(where(is.character), as.factor))
-
-# muss zu faktoren werden
-#data_final_1$`Person_lebt_nicht_im_Haushalt.1`<- as.factor(data_final_1$`Person_lebt_nicht_im_Haushalt.1`)
-
 data_final_2 <- replace_na_values(data14)
-colnames(data_final_2)
+
 # Function to clean column names to remove special characters
 clean_names <- function(df) {
   colnames(df) <- make.names(colnames(df), unique = TRUE)
@@ -535,16 +613,8 @@ clean_names <- function(df) {
 
 # Apply the function to clean column names
 data_final_clean <- clean_names(data_final_2)
-str(data_final_clean)
-# # verwndle character zu factoren um
-# data_final_clean_2 <- data_final_clean %>%
-#   mutate(across(where(is.character), as.factor))
 
-# # Ensure the response variable is a factor for classification
-# data_final_clean_2$dep_child <- as.factor(data_final_clean_2$dep_child)
-
-
-### collider
+### collider managing
 
 # Function to calculate Cramer's V for categorical variables
 cramersV <- function(x, y) {
@@ -616,8 +686,12 @@ data_final_clean_3 <- data_final_clean %>%
 # Entfernen oder Ersetzen von Inf-Werten
 data_final_clean_4 <- data_final_clean_3 %>% 
   mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
-###########
 
+
+########### remove highly correlated categorical 
+
+nrow(data_final_clean_4)
+str(data_final_clean_4)
 remove_highly_correlated_categorical <- function(data, threshold = 0.05) {
   # Alle Spaltennamen des Datensatzes
   cols <- colnames(data)
@@ -724,7 +798,7 @@ set.seed(123)
 
 data$HHLFD_ <- NULL
 data$dep_child <- factor(data$dep_child, levels = c("1", "2"), labels = c("0", "1"))
-table(data$dep_child)
+colnames(data)
 
 # data <- data %>%
 #   filter(Alter_der_Person_in_Jahren_ > 6 & Alter_der_Person_in_Jahren_ < 12)
