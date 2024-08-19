@@ -627,7 +627,7 @@ data10_clean$Aktivitätsstatus_Mutter_ <- NULL
 
 # Erstellen von Interaktionsvariablen
 
-# 1. Region (east) * Migrationshintergrund_analog_zum_NEPS_
+#1. Region (east) * Migrationshintergrund_analog_zum_NEPS_
 # data10_clean <- data10_clean %>%
 #   mutate(Interaktion_east_Migrationshintergrund = as.numeric(east) * Migrationshintergrund_analog_zum_NEPS_)
 # 
@@ -651,22 +651,11 @@ data10_clean$Aktivitätsstatus_Mutter_ <- NULL
 
 
 
-
-
-#######
-# Calculate the number of children per household
-data12 <- data10_clean %>%
-  group_by(HHLFD_) %>%
-  mutate(
-    Anzahl_Kinder = n()  # Number of children per household
-  ) %>%
-  ungroup()
-
 ###################
 
 # lasse alle irrelevanten variablen raus
-nzv <- nearZeroVar(data12, saveMetrics = TRUE)
-data14 <- data12[, !nzv$nzv]
+nzv <- nearZeroVar(data10_clean, saveMetrics = TRUE)
+data14 <- data10_clean[, !nzv$nzv]
 
 data_final_2 <- replace_na_values(data14)
 
@@ -850,10 +839,10 @@ remove_highly_correlated_numerical <- function(data, threshold = 0.9) {
   return(data[, !(colnames(data) %in% to_remove)])
 }
 
-# Beispielnutzung der Funktion
+# Annwenden
 result2 <- remove_highly_correlated_numerical(result)
 
-########check for multikollinearity
+######## check for multikollinearity
 
 # Entfernen oder Ersetzen von NaN-Werten
 data<- result2%>% 
@@ -891,13 +880,7 @@ if (is.matrix(vif_values)) {
   data <- data %>% select(-all_of(filtered_table$Variable))
 }
 
-# Ausgabe anzeigen
-
-
-
-### random forest
-# Set seed for reproducibility
-set.seed(123)
+###### random forest
 
 data$HHLFD_ <- NULL
 data$dep_child <- factor(data$dep_child, levels = c("1", "2"), labels = c("0", "1"))
@@ -908,13 +891,11 @@ trainIndex <- createDataPartition(data$dep_child, p = .8, list = FALSE, times = 
 data_train <- data[trainIndex, ]
 data_test <- data[-trainIndex, ]
 
-# Berechne die Klassenhäufigkeiten
-class_counts <- table(data_train$dep_child)
 
-# Berechne die Gewichte als invers proportional zur Häufigkeit
-class_weights <- class_counts[1] / class_counts
 
-# Trainiere das Random Forest Modell mit classwt
+# Trainiere das Random Forest Modell 
+
+# samplinganpassung
 set.seed(123)
 rf_model <- randomForest(
   dep_child ~ .,
@@ -923,8 +904,24 @@ rf_model <- randomForest(
   ntree = 200,
   nodesize = 1,
   mtry = 2,
-  classwt = as.numeric(class_weights)
+  sampsize = c(900, min(table(data_train$dep_child)))  # Equal sampling from both classes
 )
+
+# klassengewihte
+# class_weights <- c("0" = 1, 
+#                    "1" = 4186 / 502)  # Berechnung des Verhältnisses der Klassen
+# 
+# rf_model <- randomForest(
+#   dep_child ~ .,
+#   data = data_train,
+#   importance = TRUE,
+#   ntree = 300,
+#   nodesize = 1,
+#   mtry = 2,
+#   classwt = class_weights  # Klassengewichtung hinzufügen
+# )
+
+
 
 # Vorhersagen und Evaluierung des Modells
 predicted_classes <- predict(rf_model, data_test)
@@ -935,4 +932,35 @@ print(conf_matrix)
 varImpPlot(rf_model)
 
 
+
+####  GLM-Modell
+glm_model <- glm(
+  dep_child ~ ., 
+  data = data,  # Falls du ROSE benutzt hast, ansonsten data_train
+  family = binomial(link = "logit")  # Logistische Regression 
+)
+summary(glm_model)
+
+
+# Anzeigen der Koeffizienten des Modells
+coefficients <- summary(glm_model)$coefficients
+print(coefficients)
+
+# Sortieren der Koeffizienten nach deren Absolutwert
+coefficients_sorted <- coefficients[order(abs(coefficients[, "Estimate"]), decreasing = TRUE), ]
+
+# Die wichtigsten Variablen anzeigen (diejenigen mit den größten Koeffizienten)
+print("Top 10 Wichtigste Variablen nach Einfluss (Absolutwert der Koeffizienten):")
+print(coefficients_sorted[1:10, ])
+
+
+# Vorhersagen auf dem Testdatensatz
+predicted_probs <- predict(glm_model, newdata = data_test, type = "response")
+
+# ROC-Kurve und AUC berechnen
+library(pROC)
+roc_curve <- roc(data_test$dep_child, predicted_probs)
+plot(roc_curve)
+auc_value <- auc(roc_curve)
+print(paste("AUC:", auc_value))
 
