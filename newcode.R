@@ -963,4 +963,4 @@ roc_curve <- roc(data_test$dep_child, predicted_probs)
 plot(roc_curve)
 auc_value <- auc(roc_curve)
 print(paste("AUC:", auc_value))
-
+table(data$dep_child)
