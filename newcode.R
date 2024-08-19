@@ -941,7 +941,7 @@ glm_model <- glm(
 )
 summary(glm_model)
 
-
+s
 # Anzeigen der Koeffizienten des Modells
 coefficients <- summary(glm_model)$coefficients
 print(coefficients)
