@@ -1,11 +1,13 @@
-############## LIBRARIES AND PACKAGES #######
+############## LIBRARIES AND PACKAGES ##############
+
 # Install necessary packages (if not already installed)
 if (!require("haven")) install.packages("haven")
 if (!require("dplyr")) install.packages("dplyr")
 if (!require("labelled")) install.packages("labelled")
 if (!require("randomForest")) install.packages("randomForest")
 if (!require("caret")) install.packages("caret")
-#install.packages("mice")
+if (!require("mice")) install.packages("mice")
+
 # Load the necessary libraries
 library(haven)
 library(dplyr)
@@ -18,13 +20,9 @@ library(Hmisc)
 library(data.table)
 library(car)
 library(mice)
-
 library(VIM)
+
 ############### DATA CLEANING ##############
-
-# Function to replace NA values
-#install.packages("VIM")
-
 
 # Function to replace NA values using KNN imputation
 replace_na_values <- function(df, k = 5) {
@@ -42,20 +40,18 @@ replace_na_values <- function(df, k = 5) {
   return(df_imputed)
 }
 
-# Load data
-data <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_personen.sav", to.data.frame = TRUE)
+# Load data from SPSS file
+data <- read.spss("dji_suf_personen.sav", to.data.frame = TRUE)
 
-# Add value labels (numlabel in Stata is for numeric labeling, labelled package helps in R)
-# Not directly applicable in R, assume values are already labelled
+# Convert specific variables to numeric for processing
 data1 <- data %>%
   mutate(XALTER = as.numeric(as.character(XALTER)))
 
-# Filter the data
+# Filter the data based on specific conditions
 data2 <- data1 %>%
   filter(IZP == "trifft zu" & XALTER < 12)
 
-
-# Convert 'bland' to numeric for comparison
+# Convert and recode variables for region (east vs. west Germany)
 data2 <- data2 %>%
   mutate(bland_numeric = as.numeric(bland)) %>%
   mutate(east = case_when(
@@ -66,10 +62,9 @@ data2 <- data2 %>%
   mutate(east = factor(east, levels = c(0, 1), labels = c("[0] West Germany", "[1] East Germany (incl. Berlin)"))) %>%
   select(-bland_numeric) 
 
-# Optionally, you can also label the variable
 attr(data2$east, "label") <- "Region"
 
-# Correct recoding of the deprivation variables from text to numeric values
+# Recode deprivation variables
 data5 <- data2 %>%
   mutate(
     dep_c_three_meals = if_else(h22803_1 == "Ja" | h22803_1 == "Nein aus anderen Gründen", 0, if_else(h22803_1 == "Nein aus finanziellen Gründen", 1, NA_real_)),
@@ -86,310 +81,220 @@ data5 <- data2 %>%
     dep_c_holiday = if_else(h22803_14 == "Ja" | h22803_14 == "Nein aus anderen Gründen", 0, if_else(h22803_14 == "Nein aus finanziellen Gründen", 1, NA_real_))
   )
 
-
-
-# Erstellen der child specific material deprivation Variablen
+# Create child-specific material deprivation variable
 data6 <- data5 %>%
   rowwise() %>%
   mutate(
     help = sum(c_across(starts_with("dep_c_")), na.rm = TRUE),
     help2 = sum(is.na(c_across(starts_with("dep_c_")))),
     dep_child = case_when(
-      help == 0 ~ "Keine Deprivation",
+      help == 0 ~ "No Deprivation",
       help >= 1 ~ "Deprivation"
     )
   ) %>%
   ungroup()
 
-
-# Liste der zu entfernenden Variablen, die mit "dep_c" beginnen, aber nicht "dep_child"
+# Remove unnecessary variables related to deprivation but not needed for analysis
 remove_dep_c_vars <- names(data6)[grepl("^dep_c($|[^hild])", names(data6))]
-
-# Gesamtliste der zu entfernenden Variablen erstellen
 remove_vars <- unique(c(remove_dep_c_vars))
-
-# Entfernen der hoch korrelierten Variablen und der "dep_c"-Variablen aus dem Datensatz
 data6 <- data6 %>% select(-all_of(remove_vars))
 
-# Nur Beobachtungen ohne fehlende Werte in den Deprivationsvariablen behalten
+# Keep only observations without missing values in deprivation variables
 data7 <- data6 %>%
   filter(help2 == 0)
 
-# Label the new variables
+# Recode and clean other variables as needed
+data7$dep_child <- factor(data7$dep_child, levels = c("No Deprivation", "Deprivation"))
 
-data7$dep_child <- factor(data7$dep_child, levels = c("Keine Deprivation", "Deprivation"))
-
-
-### excludiere wieder weitere variablen
-
-# Pfad zur Excel-Datei
+# Load and apply a list of variables to exclude based on external file
 file_path <- "Varlist20240722.xlsx"
-
-# Einlesen der Excel-Datei
 varlist <- readxl::read_excel(file_path)
-
-# Extrahieren der relevanten Spaltennamen
 included_columns <- varlist %>%
   filter(`Exclude in next step` == "a") %>%
-  pull(`Varname`)  # Ersetzen Sie `Spaltenname` durch den tatsächlichen Namen der Spaltennamen-Spalte
-
-# Reduzieren des Datensatzes auf die relevanten Spalten
+  pull(`Varname`)
 data_reduced <- data7 %>% select(all_of(included_columns))
 
-# Ausgabe der ersten Zeilen des reduzierten Datensatzes zur Überprüfung
-
-# Lade die Excel-Liste
+# Load Excel file with column names and labels, and rename columns accordingly
 var_list <- read_excel("VarListePersonen.xlsx")
-
-# Erstelle ein Wörterbuch (Named Vector) für die Spaltennamen-Umbenennung
 colnames_mapping <- setNames(var_list$Label, var_list$`colnames(daten_personen)`)
-
-# Ändere die Spaltennamen in data9 nur, wenn sie im Wörterbuch vorhanden sind
 new_colnames <- colnames(data_reduced)
 for (i in seq_along(new_colnames)) {
   if (new_colnames[i] %in% names(colnames_mapping)) {
     new_colnames[i] <- colnames_mapping[new_colnames[i]]
   }
 }
-
-# Setze die neuen Spaltennamen in data9
 colnames(data_reduced) <- new_colnames
 
-
-# Funktion zur Überprüfung und Bereinigung von doppelten Spaltennamen
+# Clean duplicated column names
 clean_column_names <- function(df) {
-  # Identifizieren von doppelten Spaltennamen
   duplicated_names <- names(df)[duplicated(names(df))]
-  
   if(length(duplicated_names) > 0) {
-    # Erstellen eindeutiger Namen für doppelte Spalten
     names(df) <- make.unique(names(df))
-    message("Doppelte Spaltennamen wurden bereinigt.")
+    message("Duplicated column names have been cleaned.")
   } else {
-    message("Keine doppelten Spaltennamen gefunden.")
+    message("No duplicated column names found.")
   }
-  
   return(df)
 }
-
-# Bereinigen von doppelten Spaltennamen in data9
 data9 <- clean_column_names(data_reduced)
 
-# Alter des Kindes
+# Convert relevant variables to numeric and clean data
 data10 <- data9
-
-# Alter_der_Person_in_Jahren + M + V
-# Umwandlung der Alter-Variable in eine numerische Variable
 data10$Alter_der_Person_in_Jahren_ <- as.numeric(as.character(data10$Alter_der_Person_in_Jahren_))
-
-
-# Entfernen der Datensätze mit einem Alter von "0"
-#data10 <- data10[data10$Alter_der_Person_in_Jahren_ != 0, ]
-
-# Umwandlung der Alter-Variable in eine numerische Variable
 data10$Alter_der_Person_in_Jahren_Mutter_ <- as.numeric(as.character(data10$Alter_der_Person_in_Jahren_Mutter_))
 data10$Alter_der_Person_in_Jahren_Vater_ <- as.numeric(as.character(data10$Alter_der_Person_in_Jahren_Vater_))
-
-# Filtern der Einträge mit einem Alter von "0"
 anomalien <- data10[data10$Alter_der_Person_in_Jahren_Mutter_ == 0, ]
 data10_clean <- data10[
   data10$Alter_der_Person_in_Jahren_Mutter_ != 0 & 
     data10$Alter_der_Person_in_Jahren_Vater_ != 0, 
 ]
 
-
-# Migrationshintergrund_analog_zum_NEPS
+# Recode migration background variable
 data10_clean$Migrationshintergrund_analog_zum_NEPS_ <- as.numeric(factor(ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("1,0 Generation", "1,5 Generation"), 
-                                                                     "1. Generation",
-                                                                     ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("2,0 Generation", "2,25 Generation", "2,5 Generation", "2,75 Generation"),
-                                                                            "2. Generation",
-                                                                            ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("3,0 Generation", "3,25 Generation", "3,5 Generation", "3,75 Generation"),
-                                                                                   "3. Generation", 
-                                                                                   "kein Migrationshintergrund")))))
+                                                                                "1. Generation",
+                                                                                ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("2,0 Generation", "2,25 Generation", "2,5 Generation", "2,75 Generation"),
+                                                                                       "2. Generation",
+                                                                                       ifelse(data10_clean$Migrationshintergrund_analog_zum_NEPS_ %in% c("3,0 Generation", "3,25 Generation", "3,5 Generation", "3,75 Generation"),
+                                                                                              "3. Generation", 
+                                                                                              "No Migration Background")))))
 
 data10_clean$Migrationshintergrund_analog_zum_NEPS_ <- as.numeric(factor(data10_clean$Migrationshintergrund_analog_zum_NEPS_))
 
-
-# Gesundheitszustand_
+# Recode and clean health status and income variables
 data10_clean$Gesundheitszustand_ <- factor(ifelse(data10_clean$Gesundheitszustand_ %in% c("4", "5", "sehr schlecht"), 
                                                   "sehr schlecht", 
                                                   as.character(data10_clean$Gesundheitszustand_)))
-
-
 data10_clean$Gesundheitszustand_ <- as.numeric(factor(data10_clean$Gesundheitszustand_, 
-                                           levels = c("sehr gut", "2", "3", "sehr schlecht")))
+                                                      levels = c("sehr gut", "2", "3", "sehr schlecht")))
 
-# Sprachpraxis_in_Haushalt/Familie_
-data10_clean$`Sprachpraxis_in_Haushalt/Familie_`<- as.numeric(factor(data10_clean$`Sprachpraxis_in_Haushalt/Familie_`))
-
-
-## persönliches_Nettoeinkommen
-# Erstellen einer neuen numerischen Variable basierend auf den Einkommenskategorien
 data10_clean$persönliches_Nettoeinkommen_Mutter_<- as.numeric(as.character(factor(data10_clean$persönliches_Nettoeinkommen_Mutter_, 
-                                                                 levels = c("kein persönliches Einkommen", 
-                                                                            "Unter 150 Euro", 
-                                                                            "150 bis unter 300 Euro",
-                                                                            "300 bis unter 500 Euro", 
-                                                                            "500 bis unter 700 Euro",
-                                                                            "700 bis unter 900 Euro",
-                                                                            "900 bis unter 1 100 Euro",
-                                                                            "1 100 bis unter 1 300 Euro",
-                                                                            "1 300 bis unter 1 500 Euro",
-                                                                            "1 500 bis unter 1 700 Euro",
-                                                                            "1 700 bis unter 2 000 Euro",
-                                                                            "2 000 bis unter 2 300 Euro",
-                                                                            "2 300 bis unter 2 600 Euro",
-                                                                            "2 600 bis unter 2 900 Euro",
-                                                                            "2 900 bis unter 3 200 Euro",
-                                                                            "3 200 bis unter 3 600 Euro",
-                                                                            "3 600 bis unter 4 000 Euro",
-                                                                            "4 000 bis unter 4 500 Euro",
-                                                                            "4 500 bis unter 5 000 Euro",
-                                                                            "5 000 bis unter 5 500 Euro",
-                                                                            "5 500 bis unter 6 000 Euro",
-                                                                            "6 000 bis unter 7 500 Euro",
-                                                                            "7 500 bis unter 10 000 Euro",
-                                                                            "10 000 bis unter 18 000 Euro",
-                                                                            "18 000 und mehr Euro",
-                                                                            "möchte ich nicht beantworten"),
-                                                                 labels = c(0,                      # "kein persönliches Einkommen"
-                                                                            75,                     # "Unter 150 Euro" (mittlerer Punkt: (0 + 150) / 2)
-                                                                            225,                    # "150 bis unter 300 Euro" (mittlerer Punkt: (150 + 300) / 2)
-                                                                            400,                    # "300 bis unter 500 Euro" (mittlerer Punkt: (300 + 500) / 2)
-                                                                            600,                    # "500 bis unter 700 Euro" (mittlerer Punkt: (500 + 700) / 2)
-                                                                            800,                    # "700 bis unter 900 Euro" (mittlerer Punkt: (700 + 900) / 2)
-                                                                            1000,                   # "900 bis unter 1 100 Euro" (mittlerer Punkt: (900 + 1100) / 2)
-                                                                            1200,                   # "1 100 bis unter 1 300 Euro" (mittlerer Punkt: (1100 + 1300) / 2)
-                                                                            1400,                   # "1 300 bis unter 1 500 Euro" (mittlerer Punkt: (1300 + 1500) / 2)
-                                                                            1600,                   # "1 500 bis unter 1 700 Euro" (mittlerer Punkt: (1500 + 1700) / 2)
-                                                                            1850,                   # "1 700 bis unter 2 000 Euro" (mittlerer Punkt: (1700 + 2000) / 2)
-                                                                            2150,                   # "2 000 bis unter 2 300 Euro" (mittlerer Punkt: (2000 + 2300) / 2)
-                                                                            2450,                   # "2 300 bis unter 2 600 Euro" (mittlerer Punkt: (2300 + 2600) / 2)
-                                                                            2750,                   # "2 600 bis unter 2 900 Euro" (mittlerer Punkt: (2600 + 2900) / 2)
-                                                                            3050,                   # "2 900 bis unter 3 200 Euro" (mittlerer Punkt: (2900 + 3200) / 2)
-                                                                            3400,                   # "3 200 bis unter 3 600 Euro" (mittlerer Punkt: (3200 + 3600) / 2)
-                                                                            3800,                   # "3 600 bis unter 4 000 Euro" (mittlerer Punkt: (3600 + 4000) / 2)
-                                                                            4250,                   # "4 000 bis unter 4 500 Euro" (mittlerer Punkt: (4000 + 4500) / 2)
-                                                                            4750,                   # "4 500 bis unter 5 000 Euro" (mittlerer Punkt: (4500 + 5000) / 2)
-                                                                            5250,                   # "5 000 bis unter 5 500 Euro" (mittlerer Punkt: (5000 + 5500) / 2)
-                                                                            5750,                   # "5 500 bis unter 6 000 Euro" (mittlerer Punkt: (5500 + 6000) / 2)
-                                                                            6750,                   # "6 000 bis unter 7 500 Euro" (mittlerer Punkt: (6000 + 7500) / 2)
-                                                                            8750,                   # "7 500 bis unter 10 000 Euro" (mittlerer Punkt: (7500 + 10000) / 2)
-                                                                            14000,                  # "10 000 bis unter 18 000 Euro" (mittlerer Punkt: (10000 + 18000) / 2)
-                                                                            18000,                  # "18 000 und mehr Euro" (angenommener Wert: 18000)
-                                                                            NA                      # "möchte ich nicht beantworten" wird als NA kodiert
-                                                                 ))))
+                                                                                  levels = c("kein persönliches Einkommen", 
+                                                                                             "Unter 150 Euro", 
+                                                                                             "150 bis unter 300 Euro",
+                                                                                             "300 bis unter 500 Euro", 
+                                                                                             "500 bis unter 700 Euro",
+                                                                                             "700 bis unter 900 Euro",
+                                                                                             "900 bis unter 1 100 Euro",
+                                                                                             "1 100 bis unter 1 300 Euro",
+                                                                                             "1 300 bis unter 1 500 Euro",
+                                                                                             "1 500 bis unter 1 700 Euro",
+                                                                                             "1 700 bis unter 2 000 Euro",
+                                                                                             "2 000 bis unter 2 300 Euro",
+                                                                                             "2 300 bis unter 2 600 Euro",
+                                                                                             "2 600 bis unter 2 900 Euro",
+                                                                                             "2 900 bis unter 3 200 Euro",
+                                                                                             "3 200 bis unter 3 600 Euro",
+                                                                                             "3 600 bis unter 4 000 Euro",
+                                                                                             "4 000 bis unter 4 500 Euro",
+                                                                                             "4 500 bis unter 5 000 Euro",
+                                                                                             "5 000 bis unter 5 500 Euro",
+                                                                                             "5 500 bis unter 6 000 Euro",
+                                                                                             "6 000 bis unter 7 500 Euro",
+                                                                                             "7 500 bis unter 10 000 Euro",
+                                                                                             "10 000 bis unter 18 000 Euro",
+                                                                                             "18 000 und mehr Euro",
+                                                                                             "möchte ich nicht beantworten"),
+                                                                                  labels = c(0,                     
+                                                                                             75,                    
+                                                                                             225,                   
+                                                                                             400,                    
+                                                                                             600,                    
+                                                                                             800,                   
+                                                                                             1000,                   
+                                                                                             1200,                   
+                                                                                             1400,                  
+                                                                                             1600,                  
+                                                                                             1850,                  
+                                                                                             2150,                  
+                                                                                             2450,                  
+                                                                                             2750,                  
+                                                                                             3050,                   
+                                                                                             3400,                   
+                                                                                             3800,                   
+                                                                                             4250,                   
+                                                                                             4750,                   
+                                                                                             5250,                   
+                                                                                             5750,                  
+                                                                                             6750,                   
+                                                                                             8750,                   
+                                                                                             14000,                  
+                                                                                             18000,                  
+                                                                                             NA))))
 
-data10_clean$persönliches_Nettoeinkommen_Mutter_<- as.numeric(factor(data10_clean$persönliches_Nettoeinkommen_Mutter_))
-
-# Erstellen einer neuen numerischen Variable basierend auf den Einkommenskategorien für das Einkommen des Vaters
 data10_clean$persönliches_Nettoeinkommen_Vater_ <- as.numeric(as.character(factor(data10_clean$persönliches_Nettoeinkommen_Vater_, 
-                                                                levels = c("kein persönliches Einkommen", 
-                                                                           "Unter 150 Euro", 
-                                                                           "150 bis unter 300 Euro",
-                                                                           "300 bis unter 500 Euro", 
-                                                                           "500 bis unter 700 Euro",
-                                                                           "700 bis unter 900 Euro",
-                                                                           "900 bis unter 1 100 Euro",
-                                                                           "1 100 bis unter 1 300 Euro",
-                                                                           "1 300 bis unter 1 500 Euro",
-                                                                           "1 500 bis unter 1 700 Euro",
-                                                                           "1 700 bis unter 2 000 Euro",
-                                                                           "2 000 bis unter 2 300 Euro",
-                                                                           "2 300 bis unter 2 600 Euro",
-                                                                           "2 600 bis unter 2 900 Euro",
-                                                                           "2 900 bis unter 3 200 Euro",
-                                                                           "3 200 bis unter 3 600 Euro",
-                                                                           "3 600 bis unter 4 000 Euro",
-                                                                           "4 000 bis unter 4 500 Euro",
-                                                                           "4 500 bis unter 5 000 Euro",
-                                                                           "5 000 bis unter 5 500 Euro",
-                                                                           "5 500 bis unter 6 000 Euro",
-                                                                           "6 000 bis unter 7 500 Euro",
-                                                                           "7 500 bis unter 10 000 Euro",
-                                                                           "10 000 bis unter 18 000 Euro",
-                                                                           "18 000 und mehr Euro",
-                                                                           "möchte ich nicht beantworten"),
-                                                                labels = c(0,                      # "kein persönliches Einkommen"
-                                                                           75,                     # "Unter 150 Euro" (mittlerer Punkt: (0 + 150) / 2)
-                                                                           225,                    # "150 bis unter 300 Euro" (mittlerer Punkt: (150 + 300) / 2)
-                                                                           400,                    # "300 bis unter 500 Euro" (mittlerer Punkt: (300 + 500) / 2)
-                                                                           600,                    # "500 bis unter 700 Euro" (mittlerer Punkt: (500 + 700) / 2)
-                                                                           800,                    # "700 bis unter 900 Euro" (mittlerer Punkt: (700 + 900) / 2)
-                                                                           1000,                   # "900 bis unter 1 100 Euro" (mittlerer Punkt: (900 + 1100) / 2)
-                                                                           1200,                   # "1 100 bis unter 1 300 Euro" (mittlerer Punkt: (1100 + 1300) / 2)
-                                                                           1400,                   # "1 300 bis unter 1 500 Euro" (mittlerer Punkt: (1300 + 1500) / 2)
-                                                                           1600,                   # "1 500 bis unter 1 700 Euro" (mittlerer Punkt: (1500 + 1700) / 2)
-                                                                           1850,                   # "1 700 bis unter 2 000 Euro" (mittlerer Punkt: (1700 + 2000) / 2)
-                                                                           2150,                   # "2 000 bis unter 2 300 Euro" (mittlerer Punkt: (2000 + 2300) / 2)
-                                                                           2450,                   # "2 300 bis unter 2 600 Euro" (mittlerer Punkt: (2300 + 2600) / 2)
-                                                                           2750,                   # "2 600 bis unter 2 900 Euro" (mittlerer Punkt: (2600 + 2900) / 2)
-                                                                           3050,                   # "2 900 bis unter 3 200 Euro" (mittlerer Punkt: (2900 + 3200) / 2)
-                                                                           3400,                   # "3 200 bis unter 3 600 Euro" (mittlerer Punkt: (3200 + 3600) / 2)
-                                                                           3800,                   # "3 600 bis unter 4 000 Euro" (mittlerer Punkt: (3600 + 4000) / 2)
-                                                                           4250,                   # "4 000 bis unter 4 500 Euro" (mittlerer Punkt: (4000 + 4500) / 2)
-                                                                           4750,                   # "4 500 bis unter 5 000 Euro" (mittlerer Punkt: (4500 + 5000) / 2)
-                                                                           5250,                   # "5 000 bis unter 5 500 Euro" (mittlerer Punkt: (5000 + 5500) / 2)
-                                                                           5750,                   # "5 500 bis unter 6 000 Euro" (mittlerer Punkt: (5500 + 6000) / 2)
-                                                                           6750,                   # "6 000 bis unter 7 500 Euro" (mittlerer Punkt: (6000 + 7500) / 2)
-                                                                           8750,                   # "7 500 bis unter 10 000 Euro" (mittlerer Punkt: (7500 + 10000) / 2)
-                                                                           14000,                  # "10 000 bis unter 18 000 Euro" (mittlerer Punkt: (10000 + 18000) / 2)
-                                                                           18000,                  # "18 000 und mehr Euro" (angenommener Wert: 18000)
-                                                                           NA                      # "möchte ich nicht beantworten" wird als NA kodiert
-                                                                ))))
+                                                                                  levels = c("kein persönliches Einkommen", 
+                                                                                             "Unter 150 Euro", 
+                                                                                             "150 bis unter 300 Euro",
+                                                                                             "300 bis unter 500 Euro", 
+                                                                                             "500 bis unter 700 Euro",
+                                                                                             "700 bis unter 900 Euro",
+                                                                                             "900 bis unter 1 100 Euro",
+                                                                                             "1 100 bis unter 1 300 Euro",
+                                                                                             "1 300 bis unter 1 500 Euro",
+                                                                                             "1 500 bis unter 1 700 Euro",
+                                                                                             "1 700 bis unter 2 000 Euro",
+                                                                                             "2 000 bis unter 2 300 Euro",
+                                                                                             "2 300 bis unter 2 600 Euro",
+                                                                                             "2 600 bis unter 2 900 Euro",
+                                                                                             "2 900 bis unter 3 200 Euro",
+                                                                                             "3 200 bis unter 3 600 Euro",
+                                                                                             "3 600 bis unter 4 000 Euro",
+                                                                                             "4 000 bis unter 4 500 Euro",
+                                                                                             "4 500 bis unter 5 000 Euro",
+                                                                                             "5 000 bis unter 5 500 Euro",
+                                                                                             "5 500 bis unter 6 000 Euro",
+                                                                                             "6 000 bis unter 7 500 Euro",
+                                                                                             "7 500 bis unter 10 000 Euro",
+                                                                                             "10 000 bis unter 18 000 Euro",
+                                                                                             "18 000 und mehr Euro",
+                                                                                             "möchte ich nicht beantworten"),
+                                                                                  labels = c(0,                     
+                                                                                             75,                    
+                                                                                             225,                   
+                                                                                             400,                    
+                                                                                             600,                    
+                                                                                             800,                   
+                                                                                             1000,                   
+                                                                                             1200,                   
+                                                                                             1400,                  
+                                                                                             1600,                  
+                                                                                             1850,                  
+                                                                                             2150,                  
+                                                                                             2450,                  
+                                                                                             2750,                  
+                                                                                             3050,                   
+                                                                                             3400,                   
+                                                                                             3800,                   
+                                                                                             4250,                   
+                                                                                             4750,                   
+                                                                                             5250,                   
+                                                                                             5750,                  
+                                                                                             6750,                   
+                                                                                             8750,                   
+                                                                                             14000,                  
+                                                                                             18000,                  
+                                                                                             NA))))
 
-
-data10_clean$persönliches_Nettoeinkommen_Vater_ <- as.numeric(factor(data10_clean$persönliches_Nettoeinkommen_Vater_))
-
-# Äquivalenzeinkommen_Intervallmitte_
-
+# Log transformation for equivalence income
 data10_clean$log_Äquivalenzeinkommen <- log(data10_clean$Äquivalenzeinkommen_Intervallmitte_ + 1)
-
-# Entfernen der ursprünglichen Variable
 data10_clean$Äquivalenzeinkommen_Intervallmitte_ <- NULL
 
-# Geschlecht
+# Clean and recode other relevant variables
 data10_clean <- data10_clean[data10_clean$Geschlecht_ != "keines der beiden oben genannten", ]
-
-# Droppen des Faktors "keines der beiden oben genannten" aus den Levels
 data10_clean$Geschlecht_ <- droplevels(data10_clean$Geschlecht_)
-
-# Familientyp_
-data10_clean <- data10_clean[data10_clean$Familientyp_ %in% c("1 Elternteil mit Kind(ern) und weiteren Personen", 
-                                                              "Elternpaar mit Kind(ern)", 
-                                                              "Elternpaar mit Kind(ern) und weiteren Personen", 
-                                                              "komplexe Stiefväterfamilie", 
-                                                              "komplexe Stiefmütterfamilie", 
-                                                              "komplexe Stieffamilie", 
-                                                              "Stieffamilie ohne explizite Stiefeltern"), ]
-
-
 data10_clean$Familientyp_aggregiert <- factor(ifelse(data10_clean$Familientyp_ %in% c("komplexe Stiefväterfamilie", 
                                                                                       "komplexe Stiefmütterfamilie", 
                                                                                       "komplexe Stieffamilie", 
                                                                                       "Stieffamilie ohne explizite Stiefeltern"), 
                                                      "komplexe Stieffamilien", 
                                                      as.character(data10_clean$Familientyp_)))
-
-
-data10_clean$Familientyp_aggregiert<-as.numeric(factor(data10_clean$Familientyp_aggregiert))
+data10_clean$Familientyp_aggregiert <- as.numeric(factor(data10_clean$Familientyp_aggregiert))
 data10_clean$Familientyp_ <- NULL
-
-# Berufsausbildung/Studium_Mutter_
-data10_clean$`Berufsausbildung/Studium_Mutter_` <- as.numeric(factor(data10_clean$`Berufsausbildung/Studium_Mutter_` ))
-
-
-# Entfernung_zur_nächsten_ÖPNV-Haltest
-
+data10_clean$`Berufsausbildung/Studium_Mutter_` <- as.numeric(factor(data10_clean$`Berufsausbildung/Studium_Mutter_`))
 data10_clean$ÖPNV_Distance_Binned <- cut(data10_clean$`Entfernung_zur_nächsten_ÖPNV-Haltest._(in_Metern)_`,
                                          breaks = c(0, 100, 500, 1000, 2000, Inf),
                                          labels = c("Very Close", "Close", "Medium", "Far", "Very Far"))
-
 data10_clean$`Entfernung_zur_nächsten_ÖPNV-Haltest._(in_Metern)_` <- NULL
-
-
-# Socioeconomic_Group M and V
-
 data10_clean$Socioeconomic_Group_Aggregated_Mutter <- factor(
   ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` %in% c(
     "11. Higher managerial self-employed", "12. Lower managerial self-employed", 
@@ -434,10 +339,9 @@ data10_clean$Socioeconomic_Group_Aggregated_Mutter <- factor(
                       "Other Inactive Groups",
                       as.character(data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_`)
                     )))))))))))
-  
+
 data10_clean$`European_Socioeconomic_Groups_2-Steller_Mutter_` <- NULL
 data10_clean$Socioeconomic_Group_Aggregated_Mutter<-as.numeric(factor(data10_clean$Socioeconomic_Group_Aggregated_Mutter))
-
 data10_clean$Socioeconomic_Group_Aggregated_Vater <- factor(
   ifelse(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` %in% c(
     "11. Higher managerial self-employed", "12. Lower managerial self-employed", 
@@ -482,18 +386,11 @@ data10_clean$Socioeconomic_Group_Aggregated_Vater <- factor(
                       "Other Inactive Groups",
                       as.character(data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_`)
                     )))))))))))
-  
+
 data10_clean$Socioeconomic_Group_Aggregated_Vater<-as.numeric(factor(data10_clean$Socioeconomic_Group_Aggregated_Vater))
 data10_clean$`European_Socioeconomic_Groups_2-Steller_Vater_` <- NULL
-
-
-# vereinbarte_Arbeitszeit mutter and vater
 data10_clean$vereinbarte_Arbeitszeit_Mutter_ <- as.numeric(factor(data10_clean$vereinbarte_Arbeitszeit_Mutter_))
-
 data10_clean$vereinbarte_Arbeitszeit_Vater_ <- as.numeric(factor(data10_clean$vereinbarte_Arbeitszeit_Vater_))
-
-# Gebäudetypologie_in_Klassen_
-
 data10_clean$Gebäudetypologie_aggregiert <- factor(ifelse(data10_clean$Gebäudetypologie_in_Klassen_ %in% c("1a1 freistehendes Ein- bis Zweiparteienhaus, klein", "1b1 freistehendes Ein- bis Zweiparteienhaus, mittel", "1c1 freistehendes Ein- bis Zweiparteienhaus, groß"),
                                                           "Detached Houses",
                                                           ifelse(data10_clean$Gebäudetypologie_in_Klassen_ %in% c("1f1 klassische Doppelhaushälfte, klein", "1g1 klassische Doppelhaushälfte, mittel", "1h1 klassische Doppelhaushälfte, groß",
@@ -506,9 +403,7 @@ data10_clean$Gebäudetypologie_aggregiert <- factor(ifelse(data10_clean$Gebäude
 data10_clean$Gebäudetypologie_in_Klassen_ <- NULL
 data10_clean$Gebäudetypologie_aggregiert <- as.numeric(factor(data10_clean$Gebäudetypologie_aggregiert))
 
-#ISCED_2011_Mutter_
-
-# Define the order of the categories
+# Recode and clean education variables for parents
 data10_clean$ISCED_2011_Mutter_ordinal <- factor(data10_clean$ISCED_2011_Mutter_,
                                                  levels = c("Primarbereich, allgemeinbildend", 
                                                             "Sekundarbereich I, allgemeinbildend", 
@@ -520,12 +415,9 @@ data10_clean$ISCED_2011_Mutter_ordinal <- factor(data10_clean$ISCED_2011_Mutter_
                                                             "Master oder gleichwertig", 
                                                             "Promotion"),
                                                  ordered = TRUE)
-
 data10_clean$ISCED_2011_Mutter_ <- NULL
-
 data10_clean$ISCED_2011_Mutter_ordinal <- as.numeric(factor(data10_clean$ISCED_2011_Mutter_ordinal))
 
-# Define the order of the categories for ISCED_2011_Vater_
 data10_clean$ISCED_2011_Vater_ordinal <- factor(data10_clean$ISCED_2011_Vater_,
                                                 levels = c("Primarbereich, allgemeinbildend", 
                                                            "Sekundarbereich I, allgemeinbildend", 
@@ -537,16 +429,10 @@ data10_clean$ISCED_2011_Vater_ordinal <- factor(data10_clean$ISCED_2011_Vater_,
                                                            "Master oder gleichwertig", 
                                                            "Promotion"),
                                                 ordered = TRUE)
-
 data10_clean$ISCED_2011_Vater_ordinal <- as.numeric(factor(data10_clean$ISCED_2011_Vater_ordinal))
-
 data10_clean$ISCED_2011_Vater_ <- NULL
 
-
-
-## Aktivitätsstatus_Mutter und Vater
-
-# Aggregating Aktivitätsstatus_Mutter_
+# Recode and clean variables related to parents' activity status
 data10_clean$Aktivitätsstatus_Mutter_Aggregated <- factor(
   data10_clean$Aktivitätsstatus_Mutter_,
   levels = c(
@@ -565,7 +451,6 @@ data10_clean$Aktivitätsstatus_Mutter_Aggregated <- factor(
   )
 )
 
-# Aggregating Aktivitätsstatus_Vater_
 data10_clean$Aktivitätsstatus_Vater_Aggregated <- factor(
   data10_clean$Aktivitätsstatus_Vater_,
   levels = c(
@@ -584,74 +469,14 @@ data10_clean$Aktivitätsstatus_Vater_Aggregated <- factor(
   )
 )
 
-
 data10_clean$Aktivitätsstatus_Vater_ <- NULL
 data10_clean$Aktivitätsstatus_Muter_ <- NULL
 
-data10_clean$Aktivitätsstatus_Vater_Aggregated <- as.numeric(factor(data10_clean$ISCED_2011_Vater_ordinal))
-data10_clean$Aktivitätsstatus_Mutter_Aggregated <- as.numeric(factor(data10_clean$ISCED_2011_Mutter_ordinal))
-
-
-# Aggregation für Aktivitätsstatus_Mutter_
-data10_clean$Aktivitätsstatus_Mutter_Aggregiert <- factor(
-  ifelse(data10_clean$Aktivitätsstatus_Mutter_ %in% c("Besuch einer Schule, um einen allgemeinbildenden",
-                                                      "in beruflicher Ausbildung, Studium, Umschulung oder",
-                                                      "arbeitslos gemeldet     d.h. mit oder ohne finanzielle"),
-         "Nicht erwerbstätig", 
-         data10_clean$Aktivitätsstatus_Mutter_)
-)
-
-# Aggregation für Art_aktuelle_Ausbildung_Mutter_
-data10_clean$Art_aktuelle_Ausbildung_Mutter_Aggregiert <- factor(
-  ifelse(data10_clean$Art_aktuelle_Ausbildung_Mutter_ %in% c("ein Berufsvorbereitungs- oder Berufsgrundbildungsjahr o.ä.",
-                                                             "eine Lehre (betriebliche Ausbildung)",
-                                                             "eine vollzeitschulische Berufsausbildung",
-                                                             "ein Referendariat, Anerkennungsjahr, Volontariat  oder eine",
-                                                             "eine Umschulung",
-                                                             "eine sonstige Ausbildung"),
-         "Andere Ausbildung", 
-         "ein Studium an einer Fachhochschule oder Universität etc.")
-)
-
-
-data10_clean$Art_aktuelle_Ausbildung_Mutter_ <- NULL
-data10_clean$Aktivitätsstatus_Mutter_ <- NULL
-
-
-
-########## INTERACTION VARIABLE #############
-
-# Creating interaction variables
-
-# 1. Region (east) * Migration background analogous to NEPS
-# data10_clean <- data10_clean %>%
-#   mutate(Interaction_east_MigrationBackground = as.numeric(east) * MigrationBackground_analogous_to_NEPS_)
-# 
-# 2. Health status * Number of people in the household
-# data10_clean <- data10_clean %>%
-#   mutate(Interaction_HealthStatus_NumberOfPeople = HealthStatus * NumberOfPeople_inHousehold_)
-# 
-# 3. ISCED 2011 Mother ordinal * personal net income mother
-# data10_clean <- data10_clean %>%
-#   mutate(Interaction_ISCED_Mother_Income = ISCED_2011_Mother_ordinal * personal_net_income_mother)
-# 
-# 4. Public transport distance binned * log equivalized income
-# data10_clean <- data10_clean %>%
-#   mutate(Interaction_PublicTransport_EquivalizedIncome = as.numeric(PublicTransport_Distance_Binned) * log_equivalized_income)
-# 
-# 5. Gender * Socioeconomic Group Aggregated Mother
-# data10_clean <- data10_clean %>%
-#   mutate(Interaction_Gender_Socioeconomic_Mother = as.numeric(Gender) * Socioeconomic_Group_Aggregated_Mother)
-
-# Check the first rows of the expanded dataset
-
-
-###################
-
-# lasse alle irrelevanten variablen raus
+# Filter out near-zero variance features
 nzv <- nearZeroVar(data10_clean, saveMetrics = TRUE)
 data14 <- data10_clean[, !nzv$nzv]
 
+# Replace missing values using KNN imputation
 data_final_2 <- replace_na_values(data14, k=5)
 
 # Function to clean column names to remove special characters
@@ -661,8 +486,7 @@ clean_names <- function(df) {
 }
 
 # Apply the function to clean column names
-data_final_clean <- clean_names(data_final_2 )
-
+data_final_clean <- clean_names(data_final_2)
 
 # Function to calculate Cramer's V for categorical variables
 cramersV <- function(x, y, use_fisher = FALSE) {
@@ -718,15 +542,12 @@ cat_correlations <- function(data, dep_var, use_fisher = FALSE) {
   return(cat_results)
 }
 
-
 # Calculate correlations
 numeric_corrs <- num_correlations(data_final_clean, "dep_child")
 categorical_corrs <- cat_correlations(data_final_clean, "dep_child")
 
 # Combine and filter results to identify potential colliders
 threshold <- 0.4
-
-# Ensure both data frames have the same column names
 numeric_corrs <- numeric_corrs %>% rename(Score = Correlation)
 categorical_corrs <- categorical_corrs %>% rename(Score = CramersV)
 
@@ -735,45 +556,33 @@ potential_colliders <- rbind(
   categorical_corrs %>% filter(Score > threshold)
 )
 
-# Select the variables that are potential colliders
 collider_vars <- potential_colliders$Variable
 collider_vars <- setdiff(collider_vars, "dep_child")
 
 # Remove collider variables from the dataset
 data_final_clean <- data_final_clean %>% select(-all_of(collider_vars))
 
-###
-
-# Entfernen oder Ersetzen von NaN-Werten
+# Remove or replace NaN values
 data_final_clean_3 <- data_final_clean %>% 
   mutate(across(where(is.numeric), ~ ifelse(is.nan(.), median(., na.rm = TRUE), .)))
 
-# Entfernen oder Ersetzen von Inf-Werten
+# Remove or replace Inf values
 data_final_clean_4 <- data_final_clean_3 %>% 
   mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
 
-
-########### remove highly correlated categorical 
-
+# Remove highly correlated categorical variables
 remove_highly_correlated_categorical <- function(data, threshold = 0.05) {
-  # Identify all categorical columns (factors)
   categorical_cols <- names(data)[sapply(data, is.factor)]
-  
-  # List to store columns to keep
   to_keep <- categorical_cols
   
-  # Nested loop to perform Chi-Squared tests for all categorical column pairs
   for (i in 1:(length(categorical_cols) - 1)) {
     for (j in (i + 1):length(categorical_cols)) {
       var1 <- categorical_cols[i]
       var2 <- categorical_cols[j]
       
-      # Create a contingency table
       contingency_table <- table(data[[var1]], data[[var2]])
       
-      # Check if the table is valid
       if (all(contingency_table > 0)) {
-        # Perform Chi-Squared test or Fisher's Exact test
         test <- tryCatch({
           if (any(contingency_table < 5)) {
             fisher.test(contingency_table)
@@ -781,12 +590,10 @@ remove_highly_correlated_categorical <- function(data, threshold = 0.05) {
             chisq.test(contingency_table)
           }
         }, error = function(e) {
-          list(p.value = NA)  # Return NA for p-value if the test fails
+          list(p.value = NA)
         })
         
-        # Check the p-value
         if (!is.na(test$p.value) && test$p.value < threshold) {
-          # Remove the second variable if highly correlated
           if (var2 %in% to_keep && var2 != "dep_child") {
             to_keep <- setdiff(to_keep, var2)
           }
@@ -795,35 +602,24 @@ remove_highly_correlated_categorical <- function(data, threshold = 0.05) {
     }
   }
   
-  # Combine the kept categorical variables with the non-categorical variables
   remaining_data <- data[c(to_keep, setdiff(names(data), categorical_cols))]
-  
   return(remaining_data)
 }
 
-# Example usage of the function
 result <- remove_highly_correlated_categorical(data_final_clean_4)
 
-############################# remove highly correlated numerical
-
+# Remove highly correlated numerical variables
 remove_highly_correlated_numerical <- function(data, threshold = 0.9) {
-  # Nur numerische Spalten auswählen
   num_data <- data[sapply(data, is.numeric)]
-  
-  # Korrelationsmatrix berechnen
   cor_matrix <- cor(num_data, use = "pairwise.complete.obs")
-  
-  # Eine Liste der zu entfernenden Spalten initialisieren
   to_remove <- c()
   
-  # Doppelte Schleife, um die Korrelationsmatrix zu durchsuchen
   for (i in 1:(ncol(cor_matrix) - 1)) {
     for (j in (i + 1):ncol(cor_matrix)) {
       if (abs(cor_matrix[i, j]) > threshold) {
         var1 <- colnames(cor_matrix)[i]
         var2 <- colnames(cor_matrix)[j]
         
-        # Eine der hoch korrelierten Variablen zur Entfernung markieren (z.B. die zweite Variable)
         if (!(var2 %in% to_remove) && var2 != "dep_child") {
           to_remove <- c(to_remove, var2)
         }
@@ -831,68 +627,47 @@ remove_highly_correlated_numerical <- function(data, threshold = 0.9) {
     }
   }
   
-  # Die verbleibenden Spalten zurückgeben
   return(data[, !(colnames(data) %in% to_remove)])
 }
 
-# Annwenden
 result2 <- remove_highly_correlated_numerical(result)
 
-######## check for multikollinearity
-
-# Entfernen oder Ersetzen von NaN-Werten
-data<- result2%>% 
+# Check for multicollinearity and remove variables with high VIF
+data <- result2 %>% 
   mutate(across(where(is.numeric), ~ ifelse(is.nan(.), median(., na.rm = TRUE), .)))
 
-# Entfernen oder Ersetzen von Inf-Werten
 data <- data %>% 
   mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
 
-
-# Berechne die VIF-Werte
 vif_values <- vif(lm(as.numeric(dep_child) ~ ., data = data))
 
-# Wenn die VIF-Werte mehrdimensional sind (GVIF), konvertiere sie in ein DataFrame
 if (is.matrix(vif_values)) {
   table <- data.frame(Variable = rownames(vif_values), 
                       GVIF = vif_values[, "GVIF"], 
                       Df = vif_values[, "Df"], 
                       GVIF_norm = vif_values[, "GVIF"]^(1/(2*vif_values[, "Df"])))
   
-  # Filtern der Zeilen mit GVIF^(1/(2*Df)) > 5
   filtered_table <- table %>% filter(GVIF_norm > 5)
-  
-  # Entfernen der Variablen mit hohem GVIF^(1/(2*Df))
   data <- data %>% select(-all_of(filtered_table$Variable))
   
 } else {
-  # Wenn die VIF-Werte eindimensional sind, verwende sie direkt
   table <- data.frame(Variable = names(vif_values), VIF = vif_values)
-  
-  # Filtern der Zeilen mit VIF > 5
   filtered_table <- table %>% filter(VIF > 5)
-  
-  # Entfernen der Variablen mit hohem VIF
   data <- data %>% select(-all_of(filtered_table$Variable))
 }
 
-
 #################### RANDOM FOREST #################
 
+# Remove unnecessary variable
 data$HHLFD_ <- NULL
-data$dep_child <- factor(data$dep_child, levels = c("Keine Deprivation", "Deprivation"), labels = c("0", "1"))
+data$dep_child <- factor(data$dep_child, levels = c("No Deprivation", "Deprivation"), labels = c("0", "1"))
 
-
-#Split the data into training and testing sets
+# Split the data into training and testing sets
 trainIndex <- createDataPartition(data$dep_child, p = .8, list = FALSE, times = 1)
 data_train <- data[trainIndex, ]
 data_test <- data[-trainIndex, ]
 
-
-
-# Trainiere das Random Forest Modell 
-
-# samplinganpassung
+# Train the Random Forest model with adjusted sampling
 set.seed(123)
 rf_model <- randomForest(
   dep_child ~ .,
@@ -904,60 +679,45 @@ rf_model <- randomForest(
   sampsize = c(900, min(table(data_train$dep_child)))  # Equal sampling from both classes
 )
 
-# klassengewihte
-# class_weights <- c("0" = 1,
-#                    "1" = 4186 / 502)  # Berechnung des Verhältnisses der Klassen
-# 
-# rf_model <- randomForest(
-#   dep_child ~ .,
-#   data = data_train,
-#   importance = TRUE,
-#   ntree = 300,
-#   nodesize = 1,
-#   mtry = 2,
-#   classwt = class_weights  # Klassengewichtung hinzufügen
-# )
-
-
-
-# Vorhersagen und Evaluierung des Modells
+# Prediction and evaluation on the test set
 predicted_classes <- predict(rf_model, data_test)
 conf_matrix <- confusionMatrix(predicted_classes, data_test$dep_child, positive = "1")
 print(conf_matrix)
 
-# Variable Importance Plot
+# Plot variable importance
 varImpPlot(rf_model)
 
-
 ################## LOGISTIC MODEL #################
-####  GLM-Modell
+
+# Train a logistic regression model
 glm_model <- glm(
   dep_child ~ ., 
-  data = data,  # Falls du ROSE benutzt hast, ansonsten data_train
-  family = binomial(link = "logit")  # Logistische Regression 
+  data = data,  
+  family = binomial(link = "logit")  # Logistic regression 
 )
 summary(glm_model)
 
-
-# Anzeigen der Koeffizienten des Modells
+# Display coefficients of the model
 coefficients <- summary(glm_model)$coefficients
 print(coefficients)
 
-# Sortieren der Koeffizienten nach deren Absolutwert
+# Sort coefficients by absolute value
 coefficients_sorted <- coefficients[order(abs(coefficients[, "Estimate"]), decreasing = TRUE), ]
 
-# Die wichtigsten Variablen anzeigen (diejenigen mit den größten Koeffizienten)
-print("Top 10 Wichtigste Variablen nach Einfluss (Absolutwert der Koeffizienten):")
+# Display the top 10 most important variables by influence
+print("Top 10 Most Important Variables by Influence (Absolute Value of Coefficients):")
 print(coefficients_sorted[1:10, ])
 
-
-# Vorhersagen auf dem Testdatensatz
+# Predict on the test set
 predicted_probs <- predict(glm_model, newdata = data_test, type = "response")
 
-# ROC-Kurve und AUC berechnen
+# Calculate and plot ROC curve and AUC
 library(pROC)
 roc_curve <- roc(data_test$dep_child, predicted_probs)
 plot(roc_curve)
 auc_value <- auc(roc_curve)
 print(paste("AUC:", auc_value))
+
+# Display distribution of the dependent variable
 table(data$dep_child)
+
