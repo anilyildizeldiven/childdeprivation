@@ -18,6 +18,7 @@ library(Hmisc)
 library(data.table)
 library(car)
 library(mice)
+
 library(VIM)
 ############### DATA CLEANING ##############
 
@@ -42,8 +43,7 @@ replace_na_values <- function(df, k = 5) {
 }
 
 # Load data
-data <- read.spss("dji_suf_personen.sav", to.data.frame = TRUE)
-
+data <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_personen.sav", to.data.frame = TRUE)
 
 # Add value labels (numlabel in Stata is for numeric labeling, labelled package helps in R)
 # Not directly applicable in R, assume values are already labelled
@@ -138,7 +138,6 @@ data_reduced <- data7 %>% select(all_of(included_columns))
 
 # Ausgabe der ersten Zeilen des reduzierten Datensatzes zur Überprüfung
 
-
 # Lade die Excel-Liste
 var_list <- read_excel("VarListePersonen.xlsx")
 
@@ -183,7 +182,7 @@ data10 <- data9
 # Umwandlung der Alter-Variable in eine numerische Variable
 data10$Alter_der_Person_in_Jahren_ <- as.numeric(as.character(data10$Alter_der_Person_in_Jahren_))
 
-table(data10$Alter_der_Person_in_Jahren_Mutter_)
+
 # Entfernen der Datensätze mit einem Alter von "0"
 #data10 <- data10[data10$Alter_der_Person_in_Jahren_ != 0, ]
 
@@ -349,7 +348,6 @@ data10_clean$log_Äquivalenzeinkommen <- log(data10_clean$Äquivalenzeinkommen_I
 # Entfernen der ursprünglichen Variable
 data10_clean$Äquivalenzeinkommen_Intervallmitte_ <- NULL
 
-str(data10_clean)
 # Geschlecht
 data10_clean <- data10_clean[data10_clean$Geschlecht_ != "keines der beiden oben genannten", ]
 
@@ -654,7 +652,7 @@ data10_clean$Aktivitätsstatus_Mutter_ <- NULL
 nzv <- nearZeroVar(data10_clean, saveMetrics = TRUE)
 data14 <- data10_clean[, !nzv$nzv]
 
-data_final_2 <- replace_na_values(data14)
+data_final_2 <- replace_na_values(data14, k=5)
 
 # Function to clean column names to remove special characters
 clean_names <- function(df) {
@@ -663,7 +661,7 @@ clean_names <- function(df) {
 }
 
 # Apply the function to clean column names
-data_final_clean <- clean_names(data_final_2)
+data_final_clean <- clean_names(data_final_2 )
 
 
 # Function to calculate Cramer's V for categorical variables
@@ -719,6 +717,7 @@ cat_correlations <- function(data, dep_var, use_fisher = FALSE) {
   
   return(cat_results)
 }
+
 
 # Calculate correlations
 numeric_corrs <- num_correlations(data_final_clean, "dep_child")
@@ -881,7 +880,7 @@ if (is.matrix(vif_values)) {
 #################### RANDOM FOREST #################
 
 data$HHLFD_ <- NULL
-data$dep_child <- factor(data$dep_child, levels = c("1", "2"), labels = c("0", "1"))
+data$dep_child <- factor(data$dep_child, levels = c("Keine Deprivation", "Deprivation"), labels = c("0", "1"))
 
 
 #Split the data into training and testing sets
@@ -906,7 +905,7 @@ rf_model <- randomForest(
 )
 
 # klassengewihte
-# class_weights <- c("0" = 1, 
+# class_weights <- c("0" = 1,
 #                    "1" = 4186 / 502)  # Berechnung des Verhältnisses der Klassen
 # 
 # rf_model <- randomForest(
