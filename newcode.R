@@ -1,10 +1,11 @@
+############## LIBRARIES AND PACKAGES #######
 # Install necessary packages (if not already installed)
 if (!require("haven")) install.packages("haven")
 if (!require("dplyr")) install.packages("dplyr")
 if (!require("labelled")) install.packages("labelled")
 if (!require("randomForest")) install.packages("randomForest")
 if (!require("caret")) install.packages("caret")
-
+#install.packages("mice")
 # Load the necessary libraries
 library(haven)
 library(dplyr)
@@ -16,9 +17,16 @@ library(readxl)
 library(Hmisc)
 library(data.table)
 library(car)
+library(mice)
+library(VIM)
+############### DATA CLEANING ##############
 
 # Function to replace NA values
-replace_na_values <- function(df) {
+#install.packages("VIM")
+
+
+# Function to replace NA values using KNN imputation
+replace_na_values <- function(df, k = 5) {
   # Define the codes for missing values
   missing_codes <- c(-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11)
   
@@ -27,24 +35,14 @@ replace_na_values <- function(df) {
     mutate(across(where(is.numeric), ~ ifelse(. %in% missing_codes, NA, .))) %>%
     mutate(across(where(is.character), ~ ifelse(. %in% as.character(missing_codes), NA, .)))
   
-  # Impute missing factor values with the median of the column
-  df <- df %>%
-    mutate(across(where(is.factor), ~ as.factor(ifelse(is.na(.), median(as.numeric(.), na.rm = TRUE), as.numeric(.)))))
+  # Perform KNN imputation
+  df_imputed <- kNN(df, k = k, imp_var = FALSE)  # Set imp_var = FALSE to avoid creating extra columns for indicators
   
-  # Impute missing character values with the median of the column (converted to numeric for calculation)
-  df <- df %>%
-    mutate(across(where(is.character), ~ as.character(ifelse(is.na(.), median(as.numeric(.), na.rm = TRUE), as.numeric(.)))))
-  
-  # Impute missing numeric values with the median of the column
-  df <- df %>%
-    mutate(across(where(is.numeric), ~ ifelse(is.na(.), median(., na.rm = TRUE), .)))
-  
-  return(df)
+  return(df_imputed)
 }
 
-
 # Load data
-data <- read.spss("/Users/anilcaneldiven/Downloads/dji_suf_personen.sav", to.data.frame = TRUE)
+data <- read.spss("dji_suf_personen.sav", to.data.frame = TRUE)
 
 
 # Add value labels (numlabel in Stata is for numeric labeling, labelled package helps in R)
@@ -71,7 +69,7 @@ data2 <- data2 %>%
 # Optionally, you can also label the variable
 attr(data2$east, "label") <- "Region"
 
-# Korrekte Rekodierung der Deprivationsvariablen von Text in numerische Werte
+# Correct recoding of the deprivation variables from text to numeric values
 data5 <- data2 %>%
   mutate(
     dep_c_three_meals = if_else(h22803_1 == "Ja" | h22803_1 == "Nein aus anderen Gründen", 0, if_else(h22803_1 == "Nein aus finanziellen Gründen", 1, NA_real_)),
@@ -125,7 +123,7 @@ data7$dep_child <- factor(data7$dep_child, levels = c("Keine Deprivation", "Depr
 ### excludiere wieder weitere variablen
 
 # Pfad zur Excel-Datei
-file_path <- "/Users/anilcaneldiven/Desktop/Varlist20240722.xlsx"
+file_path <- "Varlist20240722.xlsx"
 
 # Einlesen der Excel-Datei
 varlist <- readxl::read_excel(file_path)
@@ -142,7 +140,7 @@ data_reduced <- data7 %>% select(all_of(included_columns))
 
 
 # Lade die Excel-Liste
-var_list <- read_excel("/Users/anilcaneldiven/Desktop/childdeprivation/VarListePersonen.xlsx")
+var_list <- read_excel("VarListePersonen.xlsx")
 
 # Erstelle ein Wörterbuch (Named Vector) für die Spaltennamen-Umbenennung
 colnames_mapping <- setNames(var_list$Label, var_list$`colnames(daten_personen)`)
@@ -623,32 +621,31 @@ data10_clean$Aktivitätsstatus_Mutter_ <- NULL
 
 
 
-##### Interaktionsvariablen !!!
+########## INTERACTION VARIABLE #############
 
-# Erstellen von Interaktionsvariablen
+# Creating interaction variables
 
-#1. Region (east) * Migrationshintergrund_analog_zum_NEPS_
+# 1. Region (east) * Migration background analogous to NEPS
 # data10_clean <- data10_clean %>%
-#   mutate(Interaktion_east_Migrationshintergrund = as.numeric(east) * Migrationshintergrund_analog_zum_NEPS_)
+#   mutate(Interaction_east_MigrationBackground = as.numeric(east) * MigrationBackground_analogous_to_NEPS_)
 # 
-# # 2. Gesundheitszustand_ * Anzahl_Personen_im_Haushalt_
+# 2. Health status * Number of people in the household
 # data10_clean <- data10_clean %>%
-#   mutate(Interaktion_Gesundheitszustand_Anzahl_Personen = Gesundheitszustand_ * Anzahl_Personen_im_Haushalt_)
+#   mutate(Interaction_HealthStatus_NumberOfPeople = HealthStatus * NumberOfPeople_inHousehold_)
 # 
-# # 3. ISCED_2011_Mutter_ordinal * persönliches_Nettoeinkommen_Mutter_
+# 3. ISCED 2011 Mother ordinal * personal net income mother
 # data10_clean <- data10_clean %>%
-#   mutate(Interaktion_ISCED_Mutter_Einkommen = ISCED_2011_Mutter_ordinal * persönliches_Nettoeinkommen_Mutter_)
+#   mutate(Interaction_ISCED_Mother_Income = ISCED_2011_Mother_ordinal * personal_net_income_mother)
 # 
-# # 4. ÖPNV_Distance_Binned * log_Äquivalenzeinkommen
+# 4. Public transport distance binned * log equivalized income
 # data10_clean <- data10_clean %>%
-#   mutate(Interaktion_ÖPNV_Äquivalenzeinkommen = as.numeric(ÖPNV_Distance_Binned) * log_Äquivalenzeinkommen)
+#   mutate(Interaction_PublicTransport_EquivalizedIncome = as.numeric(PublicTransport_Distance_Binned) * log_equivalized_income)
 # 
-# # 5. Geschlecht_ * Socioeconomic_Group_Aggregated_Mutter
+# 5. Gender * Socioeconomic Group Aggregated Mother
 # data10_clean <- data10_clean %>%
-#   mutate(Interaktion_Geschlecht_Socioeconomic_Mutter = as.numeric(Geschlecht_) * Socioeconomic_Group_Aggregated_Mutter)
+#   mutate(Interaction_Gender_Socioeconomic_Mother = as.numeric(Gender) * Socioeconomic_Group_Aggregated_Mother)
 
-# Überprüfen der ersten Zeilen des erweiterten Datensatzes
-
+# Check the first rows of the expanded dataset
 
 
 ###################
@@ -880,7 +877,8 @@ if (is.matrix(vif_values)) {
   data <- data %>% select(-all_of(filtered_table$Variable))
 }
 
-###### random forest
+
+#################### RANDOM FOREST #################
 
 data$HHLFD_ <- NULL
 data$dep_child <- factor(data$dep_child, levels = c("1", "2"), labels = c("0", "1"))
@@ -932,7 +930,7 @@ print(conf_matrix)
 varImpPlot(rf_model)
 
 
-
+################## LOGISTIC MODEL #################
 ####  GLM-Modell
 glm_model <- glm(
   dep_child ~ ., 
@@ -941,7 +939,7 @@ glm_model <- glm(
 )
 summary(glm_model)
 
-s
+
 # Anzeigen der Koeffizienten des Modells
 coefficients <- summary(glm_model)$coefficients
 print(coefficients)
