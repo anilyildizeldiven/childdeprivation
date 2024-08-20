@@ -669,55 +669,91 @@ data_test <- data[-trainIndex, ]
 
 # Train the Random Forest model with adjusted sampling
 set.seed(123)
-rf_model <- randomForest(
+
+class_weights <- table(data_train$dep_child)
+class_weights <- max(class_weights) / class_weights
+
+rf_model <- ranger(
   dep_child ~ .,
   data = data_train,
-  importance = TRUE,
-  ntree = 200,
-  nodesize = 1,
+  importance = 'impurity',
+  num.trees = 300,
+  min.node.size = 1,
   mtry = 2,
-  sampsize = c(900, min(table(data_train$dep_child)))  # Equal sampling from both classes
+  case.weights = class_weights[as.character(data_train$dep_child)]
 )
 
-# Prediction and evaluation on the test set
-predicted_classes <- predict(rf_model, data_test)
+
+# Extract the predicted classes
+predicted_classes <- predict(rf_model, data_test)$predictions
+
 conf_matrix <- confusionMatrix(predicted_classes, data_test$dep_child, positive = "1")
 print(conf_matrix)
 
 # Plot variable importance
-varImpPlot(rf_model)
+# Extrahiere die Variable Importance
+var_importance <- rf_model$variable.importance
+
+# Ausgabe der Variable Importance
+print(var_importance)
+
+# Plot der Variable Importance
+varImpPlot <- as.data.frame(var_importance)
+varImpPlot$Variable <- rownames(varImpPlot)
+varImpPlot <- varImpPlot[order(-varImpPlot$var_importance), ]  # Sortieren nach Wichtigkeit
+
+library(ggplot2)
+ggplot(varImpPlot, aes(x = reorder(Variable, var_importance), y = var_importance)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab("Variable") +
+  ylab("Importance") +
+  ggtitle("Variable Importance Plot")
 
 ################## LOGISTIC MODEL #################
 
-# Train a logistic regression model
+# Laden der notwendigen Pakete
+library(caret)
+library(pROC)
+
+# 1. Trainiere ein logistisches Regressionsmodell
 glm_model <- glm(
   dep_child ~ ., 
-  data = data,  
-  family = binomial(link = "logit")  # Logistic regression 
+  data = data_train,  
+  family = binomial(link = "logit")  # Logistische Regression 
 )
-summary(glm_model)
 
-# Display coefficients of the model
+# 2. Zeige die Koeffizienten des Modells an
 coefficients <- summary(glm_model)$coefficients
-print(coefficients)
 
-# Sort coefficients by absolute value
+# Sortiere die Koeffizienten nach dem absoluten Wert
 coefficients_sorted <- coefficients[order(abs(coefficients[, "Estimate"]), decreasing = TRUE), ]
 
-# Display the top 10 most important variables by influence
+# Zeige die 10 wichtigsten Variablen an
 print("Top 10 Most Important Variables by Influence (Absolute Value of Coefficients):")
 print(coefficients_sorted[1:10, ])
 
-# Predict on the test set
+# 3. Vorhersagen auf dem Testdatensatz
 predicted_probs <- predict(glm_model, newdata = data_test, type = "response")
 
-# Calculate and plot ROC curve and AUC
-library(pROC)
+# 4. Berechne und zeige die ROC-Kurve und AUC
 roc_curve <- roc(data_test$dep_child, predicted_probs)
 plot(roc_curve)
 auc_value <- auc(roc_curve)
 print(paste("AUC:", auc_value))
 
-# Display distribution of the dependent variable
-table(data$dep_child)
+# 5. Bestimme den optimalen Schwellenwert basierend auf der ROC-Kurve
+optimal_threshold <- as.numeric(coords(roc_curve, "best", ret = "threshold"))
+
+# 6. Erstelle binäre Vorhersagen basierend auf dem optimalen Schwellenwert
+predicted_classes_opt <- ifelse(predicted_probs > optimal_threshold, 1, 0)
+predicted_classes_opt <- factor(predicted_classes_opt, levels = c(0, 1))
+
+# 7. Berechne und zeige die Confusion Matrix für das Modell mit optimalem Schwellenwert
+conf_matrix_opt <- confusionMatrix(predicted_classes_opt, data_test$dep_child,positive = "1")
+print(conf_matrix_opt)
+
+
+
+
 
