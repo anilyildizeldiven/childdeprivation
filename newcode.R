@@ -81,7 +81,7 @@ data5 <- data2 %>%
     dep_c_holiday = if_else(h22803_14 == "Ja" | h22803_14 == "Nein aus anderen Gründen", 0, if_else(h22803_14 == "Nein aus finanziellen Gründen", 1, NA_real_))
   )
 
-# Create child-specific material deprivation variable
+#Create child-specific material deprivation variable
 data6 <- data5 %>%
   rowwise() %>%
   mutate(
@@ -103,8 +103,10 @@ data6 <- data6 %>% select(-all_of(remove_vars))
 data7 <- data6 %>%
   filter(help2 == 0)
 
+table(data7$dep_child )
 # Recode and clean other variables as needed
 data7$dep_child <- factor(data7$dep_child, levels = c("No Deprivation", "Deprivation"))
+
 
 # Load and apply a list of variables to exclude based on external file
 file_path <- "Varlist20240722.xlsx"
@@ -663,7 +665,7 @@ data$HHLFD_ <- NULL
 data$dep_child <- factor(data$dep_child, levels = c("No Deprivation", "Deprivation"), labels = c("0", "1"))
 
 # Split the data into training and testing sets
-trainIndex <- createDataPartition(data$dep_child, p = .8, list = FALSE, times = 1)
+trainIndex <- createDataPartition(data$dep_child, p = 0.8, list = FALSE, times = 1)
 data_train <- data[trainIndex, ]
 data_test <- data[-trainIndex, ]
 
@@ -673,11 +675,12 @@ set.seed(123)
 class_weights <- table(data_train$dep_child)
 class_weights <- max(class_weights) / class_weights
 
+# tune als nächstes mit F1 score passt besser bei unbalances daten
 rf_model <- ranger(
   dep_child ~ .,
   data = data_train,
   importance = 'impurity',
-  num.trees = 300,
+  num.trees = 50,
   min.node.size = 1,
   mtry = 2,
   case.weights = class_weights[as.character(data_train$dep_child)]
@@ -689,6 +692,16 @@ predicted_classes <- predict(rf_model, data_test)$predictions
 
 conf_matrix <- confusionMatrix(predicted_classes, data_test$dep_child, positive = "1")
 print(conf_matrix)
+
+# Precision, Recall und F1-Score berechnen
+precision <- conf_matrix$byClass['Pos Pred Value']
+recall <- conf_matrix$byClass['Sensitivity']
+f1_score <- 2 * ((precision * recall) / (precision + recall))
+
+# Ergebnisse ausgeben
+cat("Precision: ", precision, "\n")
+cat("Recall: ", recall, "\n")
+cat("F1-Score: ", f1_score, "\n")
 
 # Plot variable importance
 # Extrahiere die Variable Importance
@@ -753,7 +766,13 @@ predicted_classes_opt <- factor(predicted_classes_opt, levels = c(0, 1))
 conf_matrix_opt <- confusionMatrix(predicted_classes_opt, data_test$dep_child,positive = "1")
 print(conf_matrix_opt)
 
+# Precision, Recall und F1-Score berechnen
+precision <- conf_matrix_opt$byClass['Pos Pred Value']
+recall <- conf_matrix_opt$byClass['Sensitivity']
+f1_score <- 2 * ((precision * recall) / (precision + recall))
 
-
-
+# Ergebnisse ausgeben
+cat("Precision: ", precision, "\n")
+cat("Recall: ", recall, "\n")
+cat("F1-Score: ", f1_score, "\n")
 
