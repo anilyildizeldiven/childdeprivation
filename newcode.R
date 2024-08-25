@@ -559,8 +559,15 @@ data10_clean$Aktivitätsstatus_Muter_ <- NULL
 
 # Anzahl_Personen_im_Haushalt_
 
-data10_clean$log_Anzahl_Personen_im_Haushalt_ <-log(data10_clean$Anzahl_Personen_im_Haushalt_ + 1)
-data10_clean$Anzahl_Personen_im_Haushalt_ <- NULL
+data10_clean$Anzahl_Personen_im_Haushalt_ <- cut(data10_clean$Anzahl_Personen_im_Haushalt_,
+                                     breaks = c(1, 2, 4, 6, Inf),
+                                     labels = c("1-2", "3-4", "5-6", "7+"))
+table(cut(data9$Anzahl_Personen_im_Haushalt_,
+          breaks = c(1, 2, 4, 6, Inf),
+          labels = c("1-2", "3-4", "5-6", "7+")))
+
+data10_clean$Anzahl_Personen_im_Haushalt_  <- as.numeric(factor(data10_clean$Anzahl_Personen_im_Haushalt_ ))
+
 
 # Gesundheitszustand
 data10_clean$Gesundheitszustand_kat <- ifelse(data10_clean$Gesundheitszustand_ > 2, "3-4", as.character(data10_clean$Gesundheitszustand_))
@@ -571,7 +578,6 @@ data10_clean$Gesundheitszustand_kat <- as.numeric(factor(data10_clean$Gesundheit
 data10_clean$Gesundheitszustand_ <- NULL
 
 
-
 # Aggregation von Gemeindegrößenklassen
 data10_clean$Gemeindegrößenklasse_aggregiert <- factor(
   ifelse(data10_clean$pol._Gemeindegrößenklasse_ %in% c("1. unter 2.000 Einw.", "2. 2.000 bis unter 5.000 Einw."), "kleine Gemeinden",
@@ -579,6 +585,19 @@ data10_clean$Gemeindegrößenklasse_aggregiert <- factor(
                 "große Gemeinden"))
 )
 data10_clean$pol._Gemeindegrößenklasse_ <- NULL
+
+
+
+
+
+
+######
+
+# Erstellen der Interaktionsvariable
+data10_clean$Income_Socioeconomic_Interaction <- data10_clean$persönliches_Nettoeinkommen_Mutter_log * data10_clean$Socioeconomic_Group_Aggregated_Mutter
+
+#####
+
 
 # Filter out near-zero variance features
 nzv <- nearZeroVar(data10_clean, saveMetrics = TRUE)
@@ -786,7 +805,7 @@ rf_model <- ranger(
   dep_child ~ .,
   data = data_train,
   importance = 'impurity',
-  num.trees = 50,
+  num.trees = 300,
   min.node.size = 1,
   mtry = 2,
   case.weights = class_weights[as.character(data_train$dep_child)]
