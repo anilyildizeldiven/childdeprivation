@@ -260,10 +260,13 @@ for (i in seq_along(new_colnames)) {
 colnames(data9) <- new_colnames
 
 
+# Change some datatypes to prevent NAs, especially on these ones, recode income
+
 data9$Alter_der_Person_in_Jahren_Vater_ <- as.numeric(data9$Alter_der_Person_in_Jahren_Vater_)
+
 data9$Alter_der_Person_in_Jahren_Mutter_ <- as.numeric(data9$Alter_der_Person_in_Jahren_Vater_)
 
-# data9$Alter_der_Person_in_Jahren_ <- as.numeric(data9$Alter_der_Person_in_Jahren_)
+
 
 data9$persönliches_Nettoeinkommen_Mutter_<- as.numeric(as.character(factor(data9$persönliches_Nettoeinkommen_Mutter_,
                                                                            levels = c("kein persönliches Einkommen",
@@ -374,10 +377,14 @@ data9$persönliches_Nettoeinkommen_Vater_ <- as.numeric(as.character(factor(data
                                                                                       18000,
                                                                                       NA))))
 
+# Conduct imputation
 
 data10 <- replace_na_values(data9)
 
+# Delete all deprivation dimensions to prevent overfitting
+
 data11 <- data10 %>%
+  
   select(-starts_with("Deprivations"))
 
 
@@ -387,7 +394,11 @@ nzv <- nearZeroVar(data11, saveMetrics = TRUE)
 
 data12 <- data11[, !nzv$nzv]
 
+# Check deleted columns
 names(data11)
+
+
+# Delete IDs to prevent overfitting
 
 data12$Eindeutige_Personennummer_ <- NULL
 
@@ -397,7 +408,7 @@ data12$HHLFD_ <- NULL
 
 ####### treating colder + high correlation
 
-# Funktion zur Berechnung der Mutual Information für kategoriale Variablen
+# function to calculate correlation between categorical variables
 
 mutualInformation <- function(x, y) {
   
@@ -406,7 +417,7 @@ mutualInformation <- function(x, y) {
   return(mi)
 }
 
-# Funktion zur Berechnung der Mutual Information zwischen kategorialen Variablen und der Zielvariable
+# Function to calculate correlations between categorical variables and dep_child
 
 cat_correlations <- function(data, dep_var) {
   
@@ -447,17 +458,20 @@ num_correlations <- function(data, dep_var) {
 }
 
 
-# Calculate correlations
+# Calculate correlations numeric
 
 numeric_corrs <- num_correlations(data12 , "dep_child")
 
 numeric_corrs <- numeric_corrs %>% rename(Score = Correlation)
 
-# Berechnung der Korrelationen für kategoriale Variablen
+
+# Calculate correlations categorical
 
 categorical_corrs <- cat_correlations(data12 , "dep_child")
 
 categorical_corrs <- categorical_corrs %>% rename(Score = MutualInfo)
+
+# identify colliders
 
 potential_colliders <- rbind(
   
@@ -476,7 +490,11 @@ collider_vars <- setdiff(collider_vars, "dep_child")
 
 data13 <- data12 %>% select(-all_of(collider_vars))
 
+# check removed columns
+
 names(data13)
+
+## Check NaNs and Inf
 
 # Remove or replace NaN values
 
@@ -490,8 +508,9 @@ data15 <- data14 %>%
   
   mutate(across(where(is.numeric), ~ ifelse(is.infinite(.), median(., na.rm = TRUE), .)))
 
+# Multicollineatiry
 
-# Entfernen hoch korrelierter kategorialer Variablen auf Basis der Mutual Information
+# Delete highly correlated categorical variables
 
 remove_highly_correlated_categorical <- function(data, threshold = 0.2) {
   
@@ -528,6 +547,8 @@ remove_highly_correlated_categorical <- function(data, threshold = 0.2) {
   return(remaining_data)
   
 }
+
+# remove highly correlated categorical variables
 
 data16 <- remove_highly_correlated_categorical(data15)
 
@@ -572,13 +593,17 @@ remove_highly_correlated_numerical <- function(data, threshold = 0.8) {
   return(data[, !(colnames(data) %in% to_remove)])
 }
 
+# Conduct Removing of highly correlated numerical variables
+
 data17<- remove_highly_correlated_numerical(data16)
+
+# check deleted columns
 
 names(data17)
 
 # Check for multicollinearity and remove variables with high VIF
 
-# Delete NaN and Inf
+# Delete NaN and Inf again
 
 data18 <- data17 %>% 
   
@@ -629,10 +654,17 @@ names(data20)
 
 
 
-# Datensatz in Trainings- und Testdatensätze aufteilen
+# Separate into trainings and test data
+
+# colnames makes problems with rf implementation --> change columnnames
 
 colnames(data20) <- make.names(colnames(data20))
+
+# recode deprivation variable
+
 data20$dep_child <- factor(data20$dep_child , levels = c("1", "2"), labels = c("0","1"))
+
+# separate data set
 
 trainIndex <- createDataPartition(data20$dep_child, p = 0.8, list = FALSE, times = 1)
 
@@ -642,14 +674,14 @@ data_test <- data20[-trainIndex, ]
 
 
 
-# Berechne die Klassengewichte 
+# Calculate class weights
 
 class_weights <- table(data_train$dep_child)
 
 class_weights <- max(class_weights) / class_weights
 
 
-# Trainiere das Random Forest-Modell 
+# Train random forest 
 
 set.seed(123)
 
@@ -666,20 +698,20 @@ rf_model <- ranger( dep_child ~ .,
                     
 )
 
-table(data20$dep_child)
 
-# Vorhersagen auf dem unberührten Testdatensatz machen
+
+# predictions on test data
 
 predicted_classes <- predict(rf_model, data_test)$predictions
 
-# Konfusionsmatrix berechnen
+# Calculate confusion matrix
 
 conf_matrix <- confusionMatrix(predicted_classes, data_test$dep_child, positive = "1")
 
 print(conf_matrix)
 
 
-# Precision, Recall und F1-Score berechnen
+# Calculate Precision, Recall and F1-Score 
 
 precision <- conf_matrix$byClass['Pos Pred Value']
 
@@ -687,7 +719,7 @@ recall <- conf_matrix$byClass['Sensitivity']
 
 f1_score <- 2 * ((precision * recall) / (precision + recall))
 
-# Ergebnisse ausgeben
+# print results
 
 cat("Precision: ", precision, "\n")
 
@@ -696,19 +728,13 @@ cat("Recall: ", recall, "\n")
 cat("F1-Score: ", f1_score, "\n")
 
 
-
+######### Graphics #############
 
 # Plot variable importance
-# Extrahiere die Variable Importance
 
 var_importance <- rf_model$variable.importance
 
-
-# Ausgabe der Variable Importance
-
 print(var_importance)
-
-# Plot der Variable Importance
 
 varImpPlot <- as.data.frame(var_importance)
 
@@ -716,7 +742,6 @@ varImpPlot$Variable <- rownames(varImpPlot)
 
 varImpPlot <- varImpPlot[order(-varImpPlot$var_importance), ]  # Sortieren nach Wichtigkeit
 
-
 ggplot(varImpPlot, aes(x = reorder(Variable, var_importance), y = var_importance)) +
   
   geom_bar(stat = "identity") +
@@ -730,27 +755,12 @@ ggplot(varImpPlot, aes(x = reorder(Variable, var_importance), y = var_importance
   ggtitle("Variable Importance Plot")
 
 
-
-
-
-
-
-
-
-
-
-# Beispiel: Random Forest Model erstellen und Partial Dependence Plots generieren
-trainIndex <- createDataPartition(data20$dep_child, p = 0.8, list = FALSE, times = 1)
-
-data_train <- data20[trainIndex, ]
-data_test <- data20[-trainIndex, ]
-
-# Berechne die Klassengewichte 
-class_weights <- table(data_train$dep_child)
-class_weights <- max(class_weights) / class_weights
+# Plot partial dependence plots
 
 # Random Forest Modell trainieren
+
 set.seed(123)
+
 rf_model <- ranger(dep_child ~ ., 
                    data = data_train, 
                    importance = 'impurity', 
@@ -758,48 +768,72 @@ rf_model <- ranger(dep_child ~ .,
                    case.weights = class_weights[as.character(data_train$dep_child)],
                    probability = TRUE)
 
-# Variable Importance extrahieren und plotten
+# exctract variable importance
+
 var_importance <- rf_model$variable.importance
+
 varImpPlot <- as.data.frame(var_importance)
+
 varImpPlot$Variable <- rownames(varImpPlot)
+
 varImpPlot <- varImpPlot[order(-varImpPlot$var_importance), ]
 
 ggplot(varImpPlot, aes(x = reorder(Variable, var_importance), y = var_importance)) +
+  
   geom_bar(stat = "identity") +
+  
   coord_flip() +
+  
   xlab("Variable") +
+  
   ylab("Importance") +
+  
   ggtitle("Variable Importance Plot")
 
-# Partial Dependence Plots generieren
+# generate Partial Dependence Plots
+
 top_vars <- head(varImpPlot$Variable, 5)
 
-# Schleife durch die wichtigsten Variablen und erzeuge Plots
+# loop to plot
 for (var in top_vars) {
   pd <- partial(rf_model, pred.var = var, train = data_train)
   print(plotPartial(pd, main = paste("Partial Dependence Plot for", var)))
 }
 
 # Partial Dependence Plot visualisieren
+
 plot(pd$persönliches_Nettoeinkommen_Mutter_, pd$yhat, type = "l",
+     
      xlab = "Persönliches Nettoeinkommen der Mutter",
+     
      ylab = "Vorhergesagte Wahrscheinlichkeit für Deprivation",
+     
      main = "Partial Dependence Plot")
 
 
 
-# Extrahiere die Konfusionsmatrix
+# Plot confusion matrix
+
+# extract confusionsmatrix
+
 conf_matrix_table <- as.table(conf_matrix$table)
 
-# Konvertiere die Konfusionsmatrix in ein DataFrame für ggplot2
+# convert into df
+
 conf_matrix_df <- as.data.frame(conf_matrix_table)
 
-# Plot der Konfusionsmatrix als Heatmap mit vertauschten Achsen
+# plot as heatmap
+
 ggplot(data = conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+  
   geom_tile(color = "white") +
+  
   geom_text(aes(label = Freq), vjust = 1) +
+  
   scale_fill_gradient(low = "white", high = "#006600") +
+  
   theme_minimal() +
+  
   labs(title = "Confusion Matrix", x = "Predicted", y = "Actual")
 
 
