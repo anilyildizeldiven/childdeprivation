@@ -1,3 +1,15 @@
+library(haven)
+library(dplyr)
+library(labelled)
+library(randomForest)
+library(caret)
+library(foreign)
+library(readxl)
+library(Hmisc)
+library(data.table)
+library(car)
+library(ranger)
+
 ############### DATA CLEANING ##############
 
 # Function to replace NA values using KNN imputation
@@ -88,61 +100,64 @@ data5 <- data4 %>%
   
   mutate(
     
-    dep_c_three_meals = if_else(h22803_1 == "Ja", 0, if_else(h22803_1 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_three_meals = if_else(h22803_1 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_quality_meal = if_else(h22803_2 == "Ja", 0, if_else(h22803_2 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_quality_meal = if_else(h22803_2 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_fruits = if_else(h22803_3 == "Ja", 0, if_else(h22803_3 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_fruits = if_else(h22803_3 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_books = if_else(h22803_4 == "Ja", 0, if_else(h22803_4 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_books = if_else(h22803_4 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_outdoor = if_else(h22803_5 == "Ja", 0, if_else(h22803_5 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_outdoor = if_else(h22803_5 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_leisure = if_else(h22803_6 == "Ja", 0, if_else(h22803_6 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_leisure = if_else(h22803_6 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_indoor = if_else(h22803_7 == "Ja", 0, if_else(h22803_7 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_indoor = if_else(h22803_7 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_clothes = if_else(h22803_10 == "Ja", 0, if_else(h22803_10 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_clothes = if_else(h22803_10 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_shoes = if_else(h22803_11 == "Ja", 0, if_else(h22803_11 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_shoes = if_else(h22803_11 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_meet = if_else(h22803_12 == "Ja", 0, if_else(h22803_12 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_meet = if_else(h22803_12 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_celeb = if_else(h22803_13 == "Ja", 0, if_else(h22803_13 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_)),
+    dep_c_celeb = if_else(h22803_13 == "Nein aus finanziellen Gründen", 1, 0),
     
-    dep_c_holiday = if_else(h22803_14 == "Ja", 0, if_else(h22803_14 %in% c("Nein aus finanziellen Gründen", "Nein aus anderen Gründen"), 1, NA_real_))
+    dep_c_holiday = if_else(h22803_14 == "Nein aus finanziellen Gründen", 1, 0)
     
   )
+
 
 # weights for deprivation variable
 
 weights <- c(
-  
-  dep_c_three_meals = 1.5,
-  
-  dep_c_quality_meal = 1.2,
-  
-  dep_c_fruits = 1.0,
-  
-  dep_c_books = 1.3,
-  
-  dep_c_outdoor = 1.1,
-  
-  dep_c_leisure = 1.4,
-  
-  dep_c_indoor = 1.0,
-  
-  dep_c_clothes = 1.3,
-  
-  dep_c_shoes = 1.1,
-  
-  dep_c_meet = 1.5,
-  
-  dep_c_celeb = 1.0,
-  
-  dep_c_holiday = 1.2
-  
+
+  dep_c_three_meals = 1,
+
+  dep_c_quality_meal = 1,
+
+  dep_c_fruits = 1,
+
+  dep_c_books = 1,
+
+  dep_c_outdoor = 1,
+
+  dep_c_leisure = 1,
+
+  dep_c_indoor = 1,
+
+  dep_c_clothes = 1,
+
+  dep_c_shoes = 1,
+
+  dep_c_meet = 1,
+
+  dep_c_celeb = 1,
+
+  dep_c_holiday = 1
+
 )
+
+
 
 # use weights on dimensions and create final deprivation variable based on dimension
 
@@ -198,6 +213,7 @@ data7 <- data6 %>%
   filter(help2 != 12)
 
 
+
 # setting threshold for deprivation
 
 data8 <- data7 %>%
@@ -208,35 +224,77 @@ data8 <- data7 %>%
     
     dep_child = case_when(
       
-      help <= 1.5 ~ "No Deprivation",
+      help <= 0 ~ "No Deprivation",
       
-      help > 1.5 ~ "Deprivation"
+      help > 0 ~ "Deprivation"
       
     )
   )  %>%
   
   ungroup()
 
+#   0    1 
+# 3182 2314 
+
+# Load necessary libraries
+library(dplyr)
+
+
+# List of relevant variables to keep
+relevant_vars <- c(
+  "HHLFD", "INTNR", "GESCHLECHT", "XALTER", 
+  "h11008", "h11008_mu", "h11008_va", "h11008_omamu", "h11008_opamu", "h11008_omava", "h11008_opava", 
+  "h91102", "h91107", "h91109", "h91110", "h91061", "h91113", "h91114", 
+  "h71338", "h71332", "h71350", "h51117", 
+  "h35854", "h35855", "h35856", "h35857", 
+  "h35017_1", "h35017_2", "h35017_3", "h35017_4", "h35017_5", "h35017_6", "h35017_7", 
+  "h33106_1", "h33106_2", "h33106_3", "h33106_4", "h33106_5", "h33106_6", 
+  "h33117_1", "h33117_2", "h33117_3", "h33117_4", "h33117_5", "h33117_6", 
+  "h33109_1", "h33109_2", "h33109_3", "h33109_4", 
+  "h33120", "h33121", "h33212_1", "h33212_2", "h33212_3", "h33212_4", "h33212_5", "h33212_6", "h33212_7", 
+  "h33213", 
+  "v62022_1", "v62023_1", "v62022_2", "v62023_2", 
+  "h79859_1", "h79859_2", "h79859_3", "h79859_4", 
+  "k_sorgerecht_1", "k_sorgerecht_2", "k_natio", "k_NEPSmig", "k_hkland", "k_AnzETHH", 
+  "m_Anzahl_Erz_Kind", "k_aktiv", "k_muttersprache1", "k_muttersprache2", 
+  "k_othersprache1", "k_othersprache2", "k_othersprache3", "k_othersprache4", 
+  "k_othersprache5", "k_othersprache6", 
+  "k_migra_sprache", 
+  "hh11001", "hh11066", "hh11067", "hh11070_1", "hh11070_2", "hh11070_3", 
+  "hh11073", "hh11075", "hh11078", "hh11079", 
+  "k_haushaltstyp_hh", "k_familientyp_hh", "k_aequi_min_hh", "k_aequi_max_hh", "k_aequi_mean_hh", 
+  "k_arm60p_hh", "k_OSSsum_hh", "k_OSScat_hh", "k_deprivationsindex_hh", 
+  "gkbik10", "polgk", "bland", "casa_typ", "casa_hh", "casa_dist_opnv", 
+  "h11014_mu", "h11014_va", "h11015_mu", "h11015_va", "h11018_mu", "h11018_va", "h11019_mu", "h11019_va", 
+  "h11021_mu", "h11021_va", "h11022_mu", "h11022_va", "h11024_mu", "h11024_va", 
+  "h11025_mu", "h11025_va", "h11026_mu", "h11026_va", 
+  "h71020_mu", "h71020_va", "h71305_mu", "h71305_va", "h71307_mu", "h71308_mu", "h71308_va", 
+  "h71310_mu", "h71310_va", "h71312_mu", "h71312_va", "h71314_mu", "h71317_mu", "h71317_va", 
+  "h71318_mu", "h71318_va", "h71319_mu", "h71319_va", "h71321_mu", "h71321_va", 
+  "h71323_mu", "h71323_va", "h71327_mu", "h71327_va", "h71328_mu", "h71328_va", 
+  "h71332_mu", "h71332_va", "h71338_mu", "h71338_va", "h71401_mu", "h71401_va", 
+  "h71404_mu", "h71404_va", "h91061_mu", "h91061_va", "h91102_mu", "h91102_va", 
+  "h91114_mu", "h91114_va", 
+  "h91115_1_mu", "h91115_1_va", "h91115_2_mu", "h91115_2_va", "h91115_3_mu", "h91115_3_va", 
+  "h91115_4_mu", "h91115_4_va", "h91115_5_mu", "h91115_5_va", "h91115_6_mu", "h91115_6_va", 
+  "h91115_7_mu", "h91115_7_va", "h91115_8_mu", "h91115_8_va", "h91115_9_mu", "h91115_9_va", 
+  "h91115_10_mu", "h91115_10_va", "h91115_11_mu", "h91115_11_va", 
+  "k_bija_mu", "k_bija_va", "k_HatPartner_mu", "k_HatPartner_va", 
+  "k_isced2011_mu", "k_isced2011_va", "k_natio_mu", "k_natio_va", 
+  "k_muttersprache1_mu", "k_muttersprache1_va", "XALTER_mu", "XALTER_va", 
+  "k_extern_mu", "k_extern_va", "k_ZP_mit_Eltern", 
+  "k_isco08_mu3", "k_isco08_va3", "k_eseg_2_mu", "k_eseg_2_va","dep_child", "east"
+
+)
+
+# Select only the relevant variables
+data9 <- data8 %>% select(all_of(relevant_vars))
+
 
 # Convert to factor with simplified classes
+# 
+# data9$dep_child <- factor(data9$dep_child, levels = c("No Deprivation", "Deprivation"), labels = c("0","1"))
 
-data8$dep_child <- factor(data8$dep_child, levels = c("No Deprivation", "Deprivation"), labels = c("0","1"))
-
-
-
-# Load and apply a list of variables to exclude based on external file
-
-file_path <- "Varlist20240722.xlsx"
-
-varlist <- readxl::read_excel(file_path)
-
-included_columns <- varlist %>%
-  
-  filter(`Exclude in next step` == "a") %>%
-  
-  pull(`Varname`)
-
-data9 <- data8 %>% select(all_of(included_columns))
 
 
 # Load Excel file with column names and labels, and rename columns accordingly
@@ -260,6 +318,21 @@ for (i in seq_along(new_colnames)) {
 colnames(data9) <- new_colnames
 
 
+
+# Conduct imputation
+data9$`Deprivationsindex_(Subskala_finanzielle_Deprivatiton)_` <- NULL
+data9$Äquivalenzeinkommen_Untergrenze_ <- NULL
+data9$Äquivalenzeinkommen_Untergrenze_ <- NULL
+data9$Äquivalenzeinkommen_Obergrenze_ <- NULL
+data9$`Aktueller_oder_letzter_Beruf_Mutter_(ISCO-08)_` <- NULL
+data9$`Aktueller_oder_letzter_Beruf_Vater_(ISCO-08)_` <- NULL
+
+data9$`Monatlich_sparen_.Deprivationsindex_Finanzen._` <- NULL
+data9$`Möbel_ersetzen_[Deprivationsindex_Finanzen]_` <- NULL
+data9$`Unerwartete_Ausgaben_bezahlen_[Deprivationsindex…_` <- NULL
+
+data9$`Monatlich_sparen_[Deprivationsindex_Finanzen]_` <- NULL
+data9$Eindeutige_Personennummer_ <- NULL
 # Change some datatypes to prevent NAs, especially on these ones, recode income
 
 data9$Alter_der_Person_in_Jahren_Vater_ <- as.numeric(data9$Alter_der_Person_in_Jahren_Vater_)
@@ -377,38 +450,58 @@ data9$persönliches_Nettoeinkommen_Vater_ <- as.numeric(as.character(factor(data
                                                                                       18000,
                                                                                       NA))))
 
-# Conduct imputation
 
-data10 <- replace_na_values(data9)
-
-# Delete all deprivation dimensions to prevent overfitting
-
-data11 <- data10 %>%
+# Function to remove columns with more than a specified number of NAs
+remove_columns_with_nas <- function(df, na_threshold = 2000) {
+  # Calculate the number of NAs in each column
+  na_counts <- sapply(df, function(x) sum(is.na(x)))
   
-  select(-starts_with("Deprivations"))
+  # Identify columns with NA count greater than the threshold
+  columns_to_remove <- names(na_counts[na_counts > na_threshold])
+  
+  # Remove these columns from the dataframe
+  df_cleaned <- df[, !names(df) %in% columns_to_remove]
+  
+  return(df_cleaned)
+}
 
 
-# Filter out near-zero variance features
+# Example usage with your data frame
 
-nzv <- nearZeroVar(data11, saveMetrics = TRUE)
+data10 <- remove_columns_with_nas(data9, na_threshold = 1000)
 
-data12 <- data11[, !nzv$nzv]
+data11 <- replace_na_values(data10)
 
-# Check deleted columns
 names(data11)
 
 
+# Identify near-zero variance variables, excluding dep_child
+nzv <- nearZeroVar(data11 %>% select(-dep_child), saveMetrics = TRUE)
+
+# List of columns to keep (excluding NZV variables and keeping dep_child)
+columns_to_keep <- names(data11)[!nzv$nzv]
+
+# Check if dep_child is already in the list and add it if it's not
+if (!"dep_child" %in% columns_to_keep) {
+  columns_to_keep <- c(columns_to_keep, "dep_child")
+}
+
+# Subset data to keep only the desired columns
+data12 <- data11[, columns_to_keep]
+
+
+names(data12)
 # Delete IDs to prevent overfitting
 
-data12$Eindeutige_Personennummer_ <- NULL
 
 data12$HHLFD_ <- NULL
-
+data12$Eindeutige_Personennummer_ <- NULL
 
 
 ####### treating colder + high correlation
 
 # function to calculate correlation between categorical variables
+library(infotheo)
 
 mutualInformation <- function(x, y) {
   
@@ -436,6 +529,7 @@ cat_correlations <- function(data, dep_var) {
   
   return(cat_results)
 }
+
 
 
 # Function to calculate correlations between numeric variables and dep_child
@@ -512,7 +606,7 @@ data15 <- data14 %>%
 
 # Delete highly correlated categorical variables
 
-remove_highly_correlated_categorical <- function(data, threshold = 0.2) {
+remove_highly_correlated_categorical <- function(data, threshold = 0.1) {
   
   categorical_cols <- names(data)[sapply(data, is.factor)]
   
@@ -560,7 +654,7 @@ names(data16)
 
 # Remove highly correlated numerical variables
 
-remove_highly_correlated_numerical <- function(data, threshold = 0.8) {
+remove_highly_correlated_numerical <- function(data, threshold = 0.9) {
   
   num_data <- data[sapply(data, is.numeric)]
   
@@ -616,9 +710,10 @@ data19 <- data18 %>%
 
 # Recode deprivation variable
 
-# data18$dep_child <- factor(data18$dep_child, levels = c("No Deprivation", "Deprivation" ), labels = c("0", "1"))
+data19$dep_child <- factor(data19$dep_child, levels = c("No Deprivation", "Deprivation" ), labels = c("0", "1"))
 
 # VIF Calculation
+colnames( data19) <- make.names(colnames( data19))
 
 vif_values <- vif(lm(as.numeric(dep_child) ~ ., data = data19))
 
@@ -653,25 +748,23 @@ names(data20)
 #################### RANDOM FOREST #################### 
 
 
-
-# Separate into trainings and test data
+# Separate into trainings and test data# Separate into trNULL# Separate into trainings and test data# Separate into trainings NULLand test data
 
 # colnames makes problems with rf implementation --> change columnnames
 
 colnames(data20) <- make.names(colnames(data20))
-
+# levels(data20$dep_child) <- make.names(levels(data20$dep_child))
 # recode deprivation variable
 
-data20$dep_child <- factor(data20$dep_child , levels = c("1", "2"), labels = c("0","1"))
+# data20$dep_child <- factor(data20$dep_child , levels = c("1", "2"), labels = c("0","1"))
 
 # separate data set
 
-trainIndex <- createDataPartition(data20$dep_child, p = 0.8, list = FALSE, times = 1)
+trainIndex <- createDataPartition(data20$dep_child, p = 0.9, list = FALSE, times = 1)
 
 data_train <- data20[trainIndex, ]
 
 data_test <- data20[-trainIndex, ]
-
 
 
 # Calculate class weights
@@ -685,14 +778,17 @@ class_weights <- max(class_weights) / class_weights
 
 set.seed(123)
 
+table(data20$dep_child)
 
 rf_model <- ranger( dep_child ~ .,
                     
-                    data = data_train,
+                    data =data_train,
                     
                     importance = 'impurity',
                     
                     num.trees =300,
+                    
+                    mtry = 12,
                     
                     case.weights = class_weights[as.character(data_train$dep_child)]
                     
@@ -755,87 +851,5 @@ ggplot(varImpPlot, aes(x = reorder(Variable, var_importance), y = var_importance
   ggtitle("Variable Importance Plot")
 
 
-# Plot partial dependence plots
-
-# Random Forest Modell trainieren
-
-set.seed(123)
-
-rf_model <- ranger(dep_child ~ ., 
-                   data = data_train, 
-                   importance = 'impurity', 
-                   num.trees = 500, 
-                   case.weights = class_weights[as.character(data_train$dep_child)],
-                   probability = TRUE)
-
-# exctract variable importance
-
-var_importance <- rf_model$variable.importance
-
-varImpPlot <- as.data.frame(var_importance)
-
-varImpPlot$Variable <- rownames(varImpPlot)
-
-varImpPlot <- varImpPlot[order(-varImpPlot$var_importance), ]
-
-ggplot(varImpPlot, aes(x = reorder(Variable, var_importance), y = var_importance)) +
-  
-  geom_bar(stat = "identity") +
-  
-  coord_flip() +
-  
-  xlab("Variable") +
-  
-  ylab("Importance") +
-  
-  ggtitle("Variable Importance Plot")
-
-# generate Partial Dependence Plots
-
-top_vars <- head(varImpPlot$Variable, 5)
-
-# loop to plot
-for (var in top_vars) {
-  pd <- partial(rf_model, pred.var = var, train = data_train)
-  print(plotPartial(pd, main = paste("Partial Dependence Plot for", var)))
-}
-
-# Partial Dependence Plot visualisieren
-
-plot(pd$persönliches_Nettoeinkommen_Mutter_, pd$yhat, type = "l",
-     
-     xlab = "Persönliches Nettoeinkommen der Mutter",
-     
-     ylab = "Vorhergesagte Wahrscheinlichkeit für Deprivation",
-     
-     main = "Partial Dependence Plot")
-
-
-
-# Plot confusion matrix
-
-# extract confusionsmatrix
-
-conf_matrix_table <- as.table(conf_matrix$table)
-
-# convert into df
-
-conf_matrix_df <- as.data.frame(conf_matrix_table)
-
-# plot as heatmap
-
-ggplot(data = conf_matrix_df, aes(x = Prediction, y = Reference, fill = Freq)) +
-  
-  geom_tile(color = "white") +
-  
-  geom_text(aes(label = Freq), vjust = 1) +
-  
-  scale_fill_gradient(low = "white", high = "#006600") +
-  
-  theme_minimal() +
-  
-  labs(title = "Confusion Matrix", x = "Predicted", y = "Actual")
-
-
-
+############################
 
