@@ -319,27 +319,41 @@ colnames(data9) <- new_colnames
 
 
 
-# Conduct imputation
+# Delete variables which are not useful
+
 data9$`Deprivationsindex_(Subskala_finanzielle_Deprivatiton)_` <- NULL
+
 data9$Äquivalenzeinkommen_Untergrenze_ <- NULL
+
 data9$Äquivalenzeinkommen_Untergrenze_ <- NULL
+
 data9$Äquivalenzeinkommen_Obergrenze_ <- NULL
+
 data9$`Aktueller_oder_letzter_Beruf_Mutter_(ISCO-08)_` <- NULL
+
 data9$`Aktueller_oder_letzter_Beruf_Vater_(ISCO-08)_` <- NULL
 
-data9$`Monatlich_sparen_.Deprivationsindex_Finanzen._` <- NULL
 data9$`Möbel_ersetzen_[Deprivationsindex_Finanzen]_` <- NULL
+
 data9$`Unerwartete_Ausgaben_bezahlen_[Deprivationsindex…_` <- NULL
 
-data9$`Monatlich_sparen_[Deprivationsindex_Finanzen]_` <- NULL
 data9$Eindeutige_Personennummer_ <- NULL
+
+data9$HHLFD_ <- NULL
+
+
+# Prepare features for the data imputation
+
 # Change some datatypes to prevent NAs, especially on these ones, recode income
+
+# AAges
 
 data9$Alter_der_Person_in_Jahren_Vater_ <- as.numeric(data9$Alter_der_Person_in_Jahren_Vater_)
 
 data9$Alter_der_Person_in_Jahren_Mutter_ <- as.numeric(data9$Alter_der_Person_in_Jahren_Vater_)
 
 
+#income
 
 data9$persönliches_Nettoeinkommen_Mutter_<- as.numeric(as.character(factor(data9$persönliches_Nettoeinkommen_Mutter_,
                                                                            levels = c("kein persönliches Einkommen",
@@ -466,11 +480,15 @@ remove_columns_with_nas <- function(df, na_threshold = 2000) {
 }
 
 
-# Example usage with your data frame
+# remove all features which have got a lot of NAs
 
 data10 <- remove_columns_with_nas(data9, na_threshold = 1000)
 
+# Replace NAs
+
 data11 <- replace_na_values(data10)
+
+# Check
 
 names(data11)
 
@@ -483,12 +501,15 @@ columns_to_keep <- names(data11)[!nzv$nzv]
 
 # Check if dep_child is already in the list and add it if it's not
 if (!"dep_child" %in% columns_to_keep) {
+  
   columns_to_keep <- c(columns_to_keep, "dep_child")
 }
 
 # Subset data to keep only the desired columns
+
 data12 <- data11[, columns_to_keep]
 
+#Check
 
 names(data12)
 # Delete IDs to prevent overfitting
@@ -501,6 +522,7 @@ data12$Eindeutige_Personennummer_ <- NULL
 ####### treating colder + high correlation
 
 # function to calculate correlation between categorical variables
+
 library(infotheo)
 
 mutualInformation <- function(x, y) {
@@ -753,9 +775,9 @@ names(data20)
 # colnames makes problems with rf implementation --> change columnnames
 
 colnames(data20) <- make.names(colnames(data20))
+
 # levels(data20$dep_child) <- make.names(levels(data20$dep_child))
 # recode deprivation variable
-
 # data20$dep_child <- factor(data20$dep_child , levels = c("1", "2"), labels = c("0","1"))
 
 # separate data set
