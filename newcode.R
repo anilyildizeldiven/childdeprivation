@@ -341,6 +341,8 @@ data9$Eindeutige_Personennummer_ <- NULL
 
 data9$HHLFD_ <- NULL
 
+data9$`Monatlich_sparen_[Deprivationsindex_Finanzen]_` <- NULL
+
 
 # Prepare features for the data imputation
 
