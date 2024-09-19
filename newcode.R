@@ -853,7 +853,9 @@ rf_model <- ranger( dep_child ~ .,
                     
                     mtry = 12,
                     
-                    case.weights = class_weights[as.character(data_train$dep_child)]
+                    case.weights = class_weights[as.character(data_train$dep_child)],
+                    
+                    probability = TRUE
                     
 )
 
