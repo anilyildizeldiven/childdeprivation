@@ -18,3 +18,16 @@ pdp_plot_simple <- partial(
 
 # Plot the result
 plot(pdp_plot_simple, main = "Partial Dependence Plot - Simple Check")
+
+#######################
+
+# pdf to a variable
+pdp_plot <- partial(rf_model, 
+                    pred.var = "Years_of_Education_Mother", 
+                    train = data_train)
+
+# plotting
+autoplot(pdp_plot) +
+  ggtitle("Partial Dependence Plot for Years_of_Education_Mother") +
+  xlab("Years_of_Education_Mother") +
+  ylab("Partial Dependence of dep_child")
