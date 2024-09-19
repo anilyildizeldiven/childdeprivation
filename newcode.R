@@ -344,6 +344,7 @@ data9$HHLFD_ <- NULL
 data9$`Monatlich_sparen_[Deprivationsindex_Finanzen]_` <- NULL
 
 
+
 # Prepare features for the data imputation
 
 # Change some datatypes to prevent NAs, especially on these ones, recode income
@@ -778,9 +779,47 @@ names(data20)
 
 colnames(data20) <- make.names(colnames(data20))
 
-# levels(data20$dep_child) <- make.names(levels(data20$dep_child))
-# recode deprivation variable
-# data20$dep_child <- factor(data20$dep_child , levels = c("1", "2"), labels = c("0","1"))
+# name vector to rename columns
+colnames_mapping <- c(
+  "Geschlecht_" = "Gender",
+  "Geburtsland_Mutter_" = "Mother_Birth_Country",
+  "Gesundheitszustand_" = "Health_Status",
+  "Behinderung_" = "Disability",
+  "Aktivitätsstatus_differenziert_" = "Activity_Status_Detailed",
+  "andere_Sprache_1_" = "Other_Language_1",
+  "Pflegebedürftige_Personen_im_Haushalt_" = "People_Need_Care_in_Household",
+  "Bezug_ALG_II_bzw._Hartz_IV_" = "Receiving_ALG_II_or_Hartz_IV",
+  "Externe_Kinder_" = "External_Children",
+  "Haushaltstyp_" = "Household_Type",
+  "OSLO.3_Skala_Soziale_Unterstützung_kategorial_" = "OSLO_3_Scale_Social_Support_Categorical",
+  "BIK.GK_10_" = "BIK_GK_10",
+  "Gebäudetypologie_in_Klassen_" = "Building_Typology_Classes",
+  "Aktuelle_Erwerbstätigkeit_Mutter_" = "Current_Employment_Mother",
+  "Aktuelle_Erwerbstätigkeit_Vater_" = "Current_Employment_Father",
+  "Nebenerwerbstätigkeit_Mutter_" = "Secondary_Employment_Mother",
+  "Behinderung_Mutter_" = "Disability_Mother",
+  "Alter_der_Person_in_Jahren_" = "Age_in_Years",
+  "Anzahl_Elternteile_i.w.S._einer_ZP_im_Haushalt_" = "Number_of_Parents_in_Household",
+  "Anzahl_realisierter_Erziehungsmodule_pro_Kind_" = "Number_of_Parenting_Modules_Per_Child",
+  "Anzahl_Personen_im_Haushalt_" = "Number_of_People_in_Household",
+  "Anzahl_Kinderzimmer_" = "Number_of_Children_Rooms",
+  "Äquivalenzeinkommen_Intervallmitte_" = "Equivalized_Income_Midpoint",
+  "OSLO.3_Skala_Soziale_Unterstützung_" = "OSLO_3_Scale_Social_Support",
+  "Anzahl_Privathaushalte_" = "Number_of_Private_Households",
+  "Entfernung_zur_nächsten_ÖPNV.Haltest._.in_Metern._" = "Distance_to_Nearest_Public_Transport_in_Meters",
+  "persönliches_Nettoeinkommen_Mutter_" = "Personal_Net_Income_Mother",
+  "Bildungsjahre_nach_Ostermeier.Blossfeld_1998_Mutter_" = "Years_of_Education_Mother",
+  "Bildungsjahre_nach_Ostermeier.Blossfeld_1998_Vater_" = "Years_of_Education_Father",
+  "Alter_der_Person_in_Jahren_Mutter_" = "Age_of_Mother_in_Years",
+  "Person_lebt_nicht_im_Haushalt_Vater" = "Father_Not_Living_in_Household"
+)
+
+# Rename the columns using the mapping, keeping 'dep_child' unchanged
+colnames(data20) <- ifelse(
+  colnames(data20) %in% names(colnames_mapping), 
+  colnames_mapping[colnames(data20)], 
+  colnames(data20)
+)
 
 # separate data set
 
@@ -800,7 +839,7 @@ class_weights <- max(class_weights) / class_weights
 
 # Train random forest 
 
-set.seed(123)
+#set.seed(123)
 
 table(data20$dep_child)
 
