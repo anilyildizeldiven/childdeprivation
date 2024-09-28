@@ -1,5 +1,6 @@
-
 library(pdp)
+library(ggplot2)
+
 
 # write specific features to analyze
 top_numeric_features <- c("Age_in_Years", "Personal_Net_Income_Mother", 
@@ -59,3 +60,18 @@ for (feature in top_categorical_features) {
   # show plot
   print(pd_plot)
 }
+
+
+
+##### altern. ICE PLOTS
+
+# ICE-Plot for Years_of_Education_Mother
+ice_plot <- partial(rf_model, pred.var = "Years_of_Education_Mother", 
+                    train = data_train, ice = TRUE)
+
+# Plot 
+autoplot(ice_plot, center = TRUE) +
+  ggtitle("ICE Plot for Years of Education (Mother)") +
+  xlab("Years of Education (Mother)") +
+  ylab("Predicted Probability of Deprivation") +
+  theme_minimal()
