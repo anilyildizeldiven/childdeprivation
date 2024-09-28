@@ -1,33 +1,61 @@
-# Define a custom prediction function with exactly two arguments
-custom_pred_simple <- function(rf_model, newdata) {
-  # Get class predictions from the model using `predict` method
-  preds <- predict(rf_model, data = newdata)$predictions
+
+library(pdp)
+
+# write specific features to analyze
+top_numeric_features <- c("Age_in_Years", "Personal_Net_Income_Mother", 
+                          "Number_of_People_in_Household", "Years_of_Education_Father", 
+                          "Years_of_Education_Mother")
+
+# just to be sure that there are numeric
+data_train <- data_train %>%
+  mutate(across(all_of(top_numeric_features), as.numeric))
+
+# plot theses pdps for nuemricss
+for (feature in top_numeric_features) {
   
-  # Return the proportion of predictions for the positive class (e.g., class "1")
-  return(rowMeans(preds == "1"))  # Use "1" as a string to match factor levels
+  # print the namess
+  print(paste("Erstelle PDP für Feature:", feature))
+  print(paste("Datentyp:", class(data_train[[feature]])))
+  
+  # calculate date WITH PROB = TRUE
+  pd <- partial(rf_model, pred.var = feature, train = data_train, prob = TRUE)
+  
+  # PLOT
+  pd_plot <- autoplot(pd) +
+    ggtitle(paste("Partial Dependence Plot for:", feature)) +
+    xlab(feature) +
+    ylab("Predicted Probability of Deprivation") +
+    theme_minimal()
+  
+  # show the plots
+  print(pd_plot)
 }
 
-# Generate the partial dependence plot with custom prediction function
-pdp_plot_simple <- partial(
-  object = rf_model, 
-  pred.var = "aquivalenzeinkommen_intervallmitte", 
-  train = data_train, 
-  pred.fun = custom_pred_simple,  # Use the custom prediction function
-  grid.resolution = 10  # Use lower resolution to test faster
-)
 
-# Plot the result
-plot(pdp_plot_simple, main = "Partial Dependence Plot - Simple Check")
 
-#######################
+# PART 2 now categorical ones
+top_categorical_features <- c("Gender", "Household_Type", "BIK_GK_10", "Current_Employment_Mother")
 
-# pdf to a variable
-pdp_plot <- partial(rf_model, 
-                    pred.var = "Years_of_Education_Mother", 
-                    train = data_train)
-
-# plotting
-autoplot(pdp_plot) +
-  ggtitle("Partial Dependence Plot for Years_of_Education_Mother") +
-  xlab("Years_of_Education_Mother") +
-  ylab("Partial Dependence of dep_child")
+# compare numerics
+for (feature in top_categorical_features) {
+  
+  # just to be sure
+  data_train[[feature]] <- as.factor(data_train[[feature]])
+  
+  # debug printing
+  print(paste("Erstelle PDP für kategoriales Feature:", feature))
+  print(paste("Datentyp:", class(data_train[[feature]])))
+  
+  # calculate data
+  pd <- partial(rf_model, pred.var = feature, train = data_train, prob = TRUE)
+  
+  # plot
+  pd_plot <- autoplot(pd) +
+    ggtitle(paste("Partial Dependence Plot for:", feature)) +
+    xlab(feature) +
+    ylab("Predicted Probability of Deprivation") +
+    theme_minimal()
+  
+  # show plot
+  print(pd_plot)
+}
