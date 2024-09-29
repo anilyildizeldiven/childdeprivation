@@ -71,6 +71,8 @@ data3 <- data2 %>%
   
   filter(IZP == "trifft zu" & XALTER < 12)
 
+table(data3$hh11073)
+table(data21$Receiving_ALG_II_or_Hartz_IV)
 # Convert and recode variables for region (east vs. west Germany)
 
 data4 <- data3 %>%
@@ -773,8 +775,6 @@ names(data20)
 #################### RANDOM FOREST #################### 
 
 
-# Separate into trainings and test data# Separate into trNULL# Separate into trainings and test data# Separate into trainings NULLand test data
-
 # colnames makes problems with rf implementation --> change columnnames
 
 colnames(data20) <- make.names(colnames(data20))
@@ -821,13 +821,43 @@ colnames(data20) <- ifelse(
   colnames(data20)
 )
 
+
+data21 <- data20
+
+
+data21$Father_Not_Living_in_Household <- factor(data21$Father_Not_Living_in_Household)
+
+
+data21$Equivalized_Income_Midpoint <- NULL
+data21$Gender <- NULL
+data21$Disability <- NULL
+data21$Health_Status <- NULL
+
 # separate data set
+# remove outliers
+remove_outliers_zscore <- function(df, threshold = 3) {
+  # z-score to numeirc
+  df_numeric <- df %>% select(where(is.numeric))
+  z_scores <- as.data.frame(scale(df_numeric))  
+  df_no_outliers <- df[apply(z_scores, 1, function(row) all(abs(row) <= threshold)), ]
+  
+  return(df_no_outliers)
+}
 
-trainIndex <- createDataPartition(data20$dep_child, p = 0.9, list = FALSE, times = 1)
+data_cleaned <- remove_outliers_zscore(data21)  # Use Z-score method to remove outliers
 
-data_train <- data20[trainIndex, ]
 
-data_test <- data20[-trainIndex, ]
+
+
+
+
+trainIndex <- createDataPartition(data_cleaned$dep_child, p = 0.9, list = FALSE, times = 1)
+
+data_train <- data_cleaned[trainIndex, ]
+
+data_test <- data_cleaned[-trainIndex, ]
+
+
 
 
 # Calculate class weights
@@ -841,22 +871,20 @@ class_weights <- max(class_weights) / class_weights
 
 #set.seed(123)
 
-table(data20$dep_child)
 
 rf_model <- ranger( dep_child ~ .,
                     
                     data =data_train,
                     
-                    importance = 'impurity',
+                    importance = 'permutation',
                     
                     num.trees =300,
                     
-                    mtry = 12,
+                    mtry = 6,
                     
-                    case.weights = class_weights[as.character(data_train$dep_child)],
-                    
-                    probability = TRUE
-                    
+                    case.weights = class_weights[as.character(data_train$dep_child)]
+                    #,
+                    # probability = TRUE
 )
 
 
@@ -895,7 +923,7 @@ cat("F1-Score: ", f1_score, "\n")
 
 var_importance <- rf_model$variable.importance
 
-print(var_importance)
+#print(var_importance)
 
 varImpPlot <- as.data.frame(var_importance)
 
