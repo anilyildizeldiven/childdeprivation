@@ -15,33 +15,37 @@ library(ranger)
 # Function to replace NA values using KNN imputation
 
 replace_na_values <- function(df) {
-  
+
   # Define the codes for missing values
   missing_codes <- c(-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -99, -999)
-  
+
   # Replace missing codes with NA
   df <- df %>%
     mutate(across(where(is.numeric), ~ ifelse(. %in% missing_codes, NA, .))) %>%
     mutate(across(where(is.character), ~ ifelse(. %in% as.character(missing_codes), NA, .)))
-  
+
   # Store original types
   original_types <- sapply(df, class)
-  
+
   # Defensive Imputation
   # For numeric variables, replace NAs with the median to minimize impact
   df <- df %>%
     mutate(across(where(is.numeric), ~ ifelse(is.na(.), median(., na.rm = TRUE), .)))
-  
+
   # For categorical variables, replace NAs with the mode, or a placeholder if all NAs
   df <- df %>%
     mutate(across(where(is.factor), ~ ifelse(is.na(.), get_mode_or_placeholder(.), .)))
-  
+
   # Restore original types for categorical variables
   df <- df %>%
     mutate(across(names(df)[original_types == "factor"], as.factor))
-  
+
   return(df)
 }
+
+
+
+
 
 # Helper function to calculate the mode, or return "Unbekannt" if all values are NA
 get_mode_or_placeholder <- function(v) {
@@ -71,8 +75,7 @@ data3 <- data2 %>%
   
   filter(IZP == "trifft zu" & XALTER < 12)
 
-table(data3$hh11073)
-table(data21$Receiving_ALG_II_or_Hartz_IV)
+
 # Convert and recode variables for region (east vs. west Germany)
 
 data4 <- data3 %>%
@@ -825,6 +828,7 @@ colnames(data20) <- ifelse(
 data21 <- data20
 
 
+
 data21$Father_Not_Living_in_Household <- factor(data21$Father_Not_Living_in_Household)
 
 
@@ -832,10 +836,12 @@ data21$Equivalized_Income_Midpoint <- NULL
 data21$Gender <- NULL
 data21$Disability <- NULL
 data21$Health_Status <- NULL
+data21$Disability_Mother <-NULL
+data21$Secondary_Employment_Mother <-NULL
 
 # separate data set
 # remove outliers
-remove_outliers_zscore <- function(df, threshold = 3) {
+remove_outliers_zscore <- function(df, threshold = 4) {
   # z-score to numeirc
   df_numeric <- df %>% select(where(is.numeric))
   z_scores <- as.data.frame(scale(df_numeric))  
@@ -846,7 +852,9 @@ remove_outliers_zscore <- function(df, threshold = 3) {
 
 data_cleaned <- remove_outliers_zscore(data21)  # Use Z-score method to remove outliers
 
-
+str(data_cleaned)
+# Exportiere die bereinigten Daten als CSV-Datei
+write.csv(data_cleaned, "/Users/anilcaneldiven/Desktop/data_cleaned.csv", row.names = FALSE)
 
 
 
@@ -858,13 +866,12 @@ data_train <- data_cleaned[trainIndex, ]
 data_test <- data_cleaned[-trainIndex, ]
 
 
-
-
 # Calculate class weights
 
 class_weights <- table(data_train$dep_child)
 
 class_weights <- max(class_weights) / class_weights
+
 
 
 # Train random forest 
@@ -879,13 +886,16 @@ rf_model <- ranger( dep_child ~ .,
                     importance = 'permutation',
                     
                     num.trees =300,
-                    
                     mtry = 6,
                     
                     case.weights = class_weights[as.character(data_train$dep_child)]
                     #,
                     # probability = TRUE
 )
+
+
+
+
 
 
 
@@ -898,6 +908,8 @@ predicted_classes <- predict(rf_model, data_test)$predictions
 conf_matrix <- confusionMatrix(predicted_classes, data_test$dep_child, positive = "1")
 
 print(conf_matrix)
+
+
 
 
 # Calculate Precision, Recall and F1-Score 
