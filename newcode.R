@@ -837,7 +837,8 @@ data21$Gender <- NULL
 data21$Disability <- NULL
 data21$Health_Status <- NULL
 data21$Disability_Mother <-NULL
-data21$Secondary_Employment_Mother <-NULL
+
+
 
 # separate data set
 # remove outliers
@@ -852,11 +853,9 @@ remove_outliers_zscore <- function(df, threshold = 4) {
 
 data_cleaned <- remove_outliers_zscore(data21)  # Use Z-score method to remove outliers
 
-str(data_cleaned)
+# str(data_cleaned)
 # Exportiere die bereinigten Daten als CSV-Datei
 write.csv(data_cleaned, "/Users/anilcaneldiven/Desktop/data_cleaned.csv", row.names = FALSE)
-
-
 
 
 trainIndex <- createDataPartition(data_cleaned$dep_child, p = 0.9, list = FALSE, times = 1)
