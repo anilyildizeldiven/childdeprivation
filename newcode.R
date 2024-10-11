@@ -295,7 +295,6 @@ relevant_vars <- c(
 # Select only the relevant variables
 data9 <- data8 %>% select(all_of(relevant_vars))
 
-
 # Convert to factor with simplified classes
 # 
 # data9$dep_child <- factor(data9$dep_child, levels = c("No Deprivation", "Deprivation"), labels = c("0","1"))
@@ -773,8 +772,8 @@ if (is.matrix(vif_values)) {
 
 # check names
 
-names(data20)
-
+datanames <- as.data.frame(names(data20))
+df <- write.csv(datanames, "/Users/anilcaneldiven/Desktop/data_names.csv")
 #################### RANDOM FOREST #################### 
 
 
@@ -825,6 +824,7 @@ colnames(data20) <- ifelse(
 )
 
 
+
 data21 <- data20
 
 
@@ -840,6 +840,7 @@ data21$Disability_Mother <-NULL
 
 
 
+
 # separate data set
 # remove outliers
 remove_outliers_zscore <- function(df, threshold = 4) {
@@ -852,7 +853,9 @@ remove_outliers_zscore <- function(df, threshold = 4) {
 }
 
 data_cleaned <- remove_outliers_zscore(data21)  # Use Z-score method to remove outliers
-
+data_cleaned$Personal_Net_Income_Mother <- NULL
+# data_cleaned$Years_of_Education_Father <- NULL
+# data_cleaned$Number_of_Parents_in_Household <- NULL
 # str(data_cleaned)
 # Exportiere die bereinigten Daten als CSV-Datei
 write.csv(data_cleaned, "/Users/anilcaneldiven/Desktop/data_cleaned.csv", row.names = FALSE)
@@ -876,7 +879,7 @@ class_weights <- max(class_weights) / class_weights
 # Train random forest 
 
 #set.seed(123)
-
+str(data_train)
 
 rf_model <- ranger( dep_child ~ .,
                     
@@ -888,8 +891,6 @@ rf_model <- ranger( dep_child ~ .,
                     mtry = 6,
                     
                     case.weights = class_weights[as.character(data_train$dep_child)]
-                    #,
-                    # probability = TRUE
 )
 
 
