@@ -238,11 +238,6 @@ data8 <- data7 %>%
   
   ungroup()
 
-#   0    1 
-# 3182 2314 
-
-# Load necessary libraries
-library(dplyr)
 
 
 # List of relevant variables to keep
@@ -294,6 +289,7 @@ relevant_vars <- c(
 
 # Select only the relevant variables
 data9 <- data8 %>% select(all_of(relevant_vars))
+
 
 # Convert to factor with simplified classes
 # 
@@ -594,6 +590,37 @@ categorical_corrs <- cat_correlations(data12 , "dep_child")
 
 categorical_corrs <- categorical_corrs %>% rename(Score = MutualInfo)
 
+
+# heuristic way to identify colliders
+find_potential_colliders <- function(numeric_corrs, categorical_corrs, threshold_pred = 0.8, threshold_target = 0.5) {
+  
+  # nuemric featurs, which correlates with other featrs
+  potential_numeric_colliders <- numeric_corrs %>% filter(abs(Score) > threshold_pred)
+  
+  # categorical featurs, which correlates with other featrs
+  potential_categorical_colliders <- categorical_corrs %>% filter(Score > threshold_pred)
+  
+  # features with hgih correlation with targetvariab
+  potential_colliders <- rbind(
+    numeric_corrs %>% filter(abs(Score) > threshold_target),
+    categorical_corrs %>% filter(Score > threshold_target)
+  )
+  
+  # Entferne potenzielle Collider, die sowohl mit Prädiktoren als auch mit der Zielvariable stark korrelieren
+  collider_vars <- intersect(potential_numeric_colliders$Variable, potential_colliders$Variable)
+  
+  return(collider_vars)
+}
+
+# Finde und entferne Colliders
+collider_vars <- find_potential_colliders(numeric_corrs, categorical_corrs)
+
+# Entferne diese Collider aus den Daten
+data13 <- data12 %>% select(-all_of(collider_vars))
+
+
+
+
 # identify colliders
 
 potential_colliders <- rbind(
@@ -609,7 +636,97 @@ collider_vars <- potential_colliders$Variable
 
 collider_vars <- setdiff(collider_vars, "dep_child")
 
-# Remove collider variables from the dataset
+
+# ## 
+# # Bibliotheken laden
+# library(dplyr)
+# library(infotheo)
+# 
+# ############### FUNKTIONEN ###############
+# 
+# # Funktion zur Berechnung der Mutual Information zwischen zwei Variablen
+# mutualInformation <- function(x, y) {
+#   mi <- mutinformation(discretize(x), discretize(y))
+#   return(mi)
+# }
+# 
+# # Funktion zur Berechnung der Korrelationen zwischen numerischen Variablen und Zielvariable
+# num_correlations <- function(data, dep_var) {
+#   cor_results <- data.frame(Variable = character(), Correlation = numeric(), stringsAsFactors = FALSE)
+#   numeric_vars <- data %>% select(where(is.numeric))
+#   
+#   for (var in colnames(numeric_vars)) {
+#     cor_value <- cor(numeric_vars[[var]], as.numeric(as.factor(data[[dep_var]])), use = "complete.obs")
+#     cor_results <- rbind(cor_results, data.frame(Variable = var, Correlation = cor_value, stringsAsFactors = FALSE))
+#   }
+#   
+#   return(cor_results)
+# }
+# 
+# # Funktion zur Berechnung der Korrelationen zwischen kategorialen Variablen und Zielvariable
+# cat_correlations <- function(data, dep_var) {
+#   cat_results <- data.frame(Variable = character(), MutualInfo = numeric(), stringsAsFactors = FALSE)
+#   cat_vars <- data %>% select(where(is.factor))
+#   
+#   for (var in colnames(cat_vars)) {
+#     mi_value <- mutualInformation(cat_vars[[var]], data[[dep_var]])
+#     cat_results <- rbind(cat_results, data.frame(Variable = var, MutualInfo = mi_value, stringsAsFactors = TRUE))
+#   }
+#   
+#   return(cat_results)
+# }
+# 
+# ############### COLLIDER ERKENNEN UND ENTFERNEN ###############
+# 
+# # 1. Korrelationen zwischen numerischen Prädiktoren berechnen
+# num_pred_cor_matrix <- cor(data12 %>% select(where(is.numeric)), use = "pairwise.complete.obs")
+# 
+# # Filtere starke Korrelationen (>0.8) zwischen den numerischen Prädiktoren
+# strong_num_pred_cor <- which(abs(num_pred_cor_matrix) > 0.8 & abs(num_pred_cor_matrix) < 1, arr.ind = TRUE)
+# strong_num_pred_vars <- unique(rownames(strong_num_pred_cor))  # Stark korrelierte numerische Prädiktoren
+# 
+# # 2. Berechne Mutual Information zwischen kategorialen Prädiktoren
+# cat_vars <- data12 %>% select(where(is.factor))
+# 
+# cat_pred_cor_matrix <- matrix(NA, nrow = ncol(cat_vars), ncol = ncol(cat_vars))
+# rownames(cat_pred_cor_matrix) <- colnames(cat_vars)
+# colnames(cat_pred_cor_matrix) <- colnames(cat_vars)
+# 
+# for (i in 1:(ncol(cat_vars) - 1)) {
+#   for (j in (i + 1):ncol(cat_vars)) {
+#     mi_value <- mutualInformation(cat_vars[[i]], cat_vars[[j]])
+#     cat_pred_cor_matrix[i, j] <- mi_value
+#     cat_pred_cor_matrix[j, i] <- mi_value
+#   }
+# }
+# 
+# # Stark korrelierte kategoriale Variablen (Mutual Information > 0.1)
+# strong_cat_pred_cor <- which(cat_pred_cor_matrix > 0.1, arr.ind = TRUE)
+# strong_cat_pred_vars <- unique(rownames(strong_cat_pred_cor))  # Stark korrelierte kategoriale Prädiktoren
+# 
+# # 3. Berechne Korrelationen zwischen Prädiktoren und der Zielvariable
+# numeric_corrs <- num_correlations(data12, "dep_child")
+# numeric_corrs <- numeric_corrs %>% rename(Score = Correlation)
+# 
+# categorical_corrs <- cat_correlations(data12, "dep_child")
+# categorical_corrs <- categorical_corrs %>% rename(Score = MutualInfo)
+# 
+# # 4. Finde potenzielle Colliders:
+# # Numerische Variablen, die sowohl mit Prädiktoren als auch der Zielvariable stark korrelieren
+# potential_numeric_colliders <- numeric_corrs %>% filter(abs(Score) > 0.5) %>% 
+#   filter(Variable %in% strong_num_pred_vars)
+# 
+# # Kategoriale Variablen, die sowohl mit Prädiktoren als auch der Zielvariable stark korrelieren
+# potential_categorical_colliders <- categorical_corrs %>% filter(Score > 0.1) %>% 
+#   filter(Variable %in% strong_cat_pred_vars)
+# 
+# # Kombiniere beide
+# potential_colliders <- rbind(potential_numeric_colliders, potential_categorical_colliders)
+# 
+# # 5. Entferne die potenziellen Collider-Variablen aus den Daten
+# collider_vars <- potential_colliders$Variable
+# data12 <- data12 %>% select(-all_of(collider_vars))
+# # Remove collider variables from the dataset
 
 data13 <- data12 %>% select(-all_of(collider_vars))
 
@@ -741,6 +858,9 @@ data19 <- data18 %>%
 
 data19$dep_child <- factor(data19$dep_child, levels = c("No Deprivation", "Deprivation" ), labels = c("0", "1"))
 
+table(data19$dep_child)
+
+
 # VIF Calculation
 colnames( data19) <- make.names(colnames( data19))
 
@@ -857,9 +977,10 @@ data_cleaned$Personal_Net_Income_Mother <- NULL
 # data_cleaned$Years_of_Education_Father <- NULL
 # data_cleaned$Number_of_Parents_in_Household <- NULL
 # str(data_cleaned)
+nrow(data_cleaned)
 # Exportiere die bereinigten Daten als CSV-Datei
 write.csv(data_cleaned, "/Users/anilcaneldiven/Desktop/data_cleaned.csv", row.names = FALSE)
-
+names(data_cleaned)
 
 trainIndex <- createDataPartition(data_cleaned$dep_child, p = 0.9, list = FALSE, times = 1)
 
@@ -879,18 +1000,18 @@ class_weights <- max(class_weights) / class_weights
 # Train random forest 
 
 #set.seed(123)
-str(data_train)
+
 
 rf_model <- ranger( dep_child ~ .,
                     
-                    data =data_train,
+                    data =data_train_under,
                     
                     importance = 'permutation',
                     
                     num.trees =300,
-                    mtry = 6,
-                    
-                    case.weights = class_weights[as.character(data_train$dep_child)]
+                    mtry = 6
+                    # 
+                    # case.weights = class_weights[as.character(data_train$dep_child)]
 )
 
 
