@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-# Annahme: X enthält numerische und kategoriale Features, y ist der Zielwert
 
 # Step 1: Split data into train (90%) and test sets (10%)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=123, stratify=y)
@@ -47,10 +46,10 @@ y_test_pred = best_xgb_model.predict(X_test)
 # Step 7: Calculate F1-score on the test set
 test_f1 = f1_score(y_test, y_test_pred, pos_label=1)
 
-# Step 8: Confusion Matrix (using green color map)
+# Step 8: Confusion Matrix 
 conf_matrix = confusion_matrix(y_test, y_test_pred)
 disp = ConfusionMatrixDisplay(confusion_matrix=conf_matrix, display_labels=best_xgb_model.classes_)
-disp.plot(cmap=plt.cm.Greens)  # Use green colormap for LMU representation
+disp.plot(cmap=plt.cm.Greens) 
 plt.title(f"Confusion Matrix - Best XGBoost Model (F1-Score: {test_f1:.4f})")
 plt.show()
 
