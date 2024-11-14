@@ -1,0 +1,53 @@
+---
+output:
+  pdf_document:
+    latex_engine: xelatex
+geometry: margin=1cm, paperwidth=30cm, paperheight=20cm
+---
+
+```{r, echo=FALSE}
+library(tibble)
+library(gt)
+
+# Daten erstellen
+colnames_data_cleaned <- c(
+  "Gender", "Mother_Birth_Country", "Health_Status", "Disability",
+  "Activity_Status_Detailed", "Other_Language_1", "People_Need_Care_in_Household",
+  "Receiving_ALG_II_or_Hartz_IV", "External_Children", "Household_Type",
+  "BIK_GK_10", "Building_Typology_Classes", "Current_Employment_Mother",
+  "Current_Employment_Father", "Secondary_Employment_Mother", "Disability_Mother",
+  "Age_in_Years", "Number_of_Parents_in_Household", "Number_of_Parenting_Modules_Per_Child",
+  "Number_of_People_in_Household", "Number_of_Children_Rooms", "Equivalized_Income_Midpoint",
+  "OSLO_3_Scale_Social_Support", "Number_of_Private_Households",
+  "Distance_to_Nearest_Public_Transport_in_Meters", "Years_of_Education_Mother",
+  "Years_of_Education_Father", "Age_of_Mother_in_Years",
+  "Age_of_Father_in_Years", "Father_Not_Living_in_Household", "dep_child"
+)
+
+descriptions <- c(
+  "Gender of the child", "Birth country of the mother", "Health status of the child",
+  "Disability status of the child", "Detailed employment status",
+  "Primary language other than the main language", "Number of people in the household who need care",
+  "Receiving ALG II or Hartz IV (social welfare benefits)", "Children living outside of the household",
+  "Type of household (e.g., single-parent)", "Municipal size category",
+  "Type of building (typology classification)", "Current employment status of the mother",
+  "Current employment status of the father", "Mother’s secondary employment status",
+  "Disability status of the mother", "Age of the child in years", "Number of parents in the household",
+  "Number of parenting modules per child", "Total number of people in the household",
+  "Number of rooms designated for children", "Household income midpoint, adjusted for household size",
+  "OSLO-3 social support scale (social support assessment)", "Total number of private households",
+  "Distance to the nearest public transportation in meters", "Years of education for the mother",
+  "Years of education for the father", "Age of the mother in years",
+  "Age of the father in years", "Indicator if the father does not live in the household",
+  "Deprivation status of child"
+)
+
+# Tabelle erstellen und Spaltenbreite anpassen
+col_info <- tibble(
+  Feature = colnames_data_cleaned,
+  Description = descriptions
+)
+
+gt_tbl <- gt(col_info)
+
+gt_tbl
