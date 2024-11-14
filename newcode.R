@@ -1079,3 +1079,144 @@ ggplot(varImpPlot, aes(x = reorder(Variable, var_importance), y = var_importance
 
 ############################
 
+ # Graphics
+
+# Load libraries
+library(giscoR)
+library(dplyr)
+library(mapsf)
+library(sf)
+
+# Load federal state data of Germany
+ger_fedtstates <- gisco_get_nuts(
+  nuts_level = 1,
+  resolution = 10,
+  country = "Germany",
+  year = 2021
+)
+
+# Create a dataset with federal states and values
+dat <- read.table(text = "
+      state value
+      Sachsen 338
+      Bayern 1051
+      Rheinland-Pfalz 294
+      Saarland 97
+      Schleswig-Holstein 133
+      Niedersachsen  440
+      Nordrhein-Westfalen 1162
+      Baden-Württemberg 706
+      Brandenburg 244
+      Mecklenburg-Vorpommern 101
+      Bremen 51
+      Hamburg 56
+      Hessen 346
+      Berlin 196
+      Thüringen 141
+      Sachsen-Anhalt 140
+", header = TRUE)
+
+# Merge federal state data with values
+ger_fedstates_end <- ger_fedtstates %>%
+  left_join(dat, by = c("NUTS_NAME" = "state"))
+
+# Specify offset values for specific federal states
+overlapDOWN <- c("Berlin")   # e.g., shift downwards
+overlapUP <- c("Brandenburg") # e.g., shift upwards
+
+# Create a new field for offset adjustments and initialize it
+ger_fedstates_end <- ger_fedstates_end %>%
+  mutate(overlap = 0)
+
+# Assign offsets
+ger_fedstates_end$overlap[ger_fedstates_end$NUTS_NAME %in% overlapUP] <- 0.1  # slight upward shift
+ger_fedstates_end$overlap[ger_fedstates_end$NUTS_NAME %in% overlapDOWN] <- -0.1  # slight downward shift
+
+# Create the plot with choropleth shading
+mf_choro(ger_fedstates_end, 
+         var = "value", 
+         pal = c("#D5F1A5", "#A7D78C","#56B174", "#1D8F59","#006747"),
+         leg_val_rnd = 0,
+         leg_pos = "topleft",
+         leg_title = NA)
+
+# Add labels with manual y-coordinate shifts
+mf_label(ger_fedstates_end, 
+         var = "NUTS_NAME", 
+         col = "black", 
+         cex = 0.7, 
+         halo = TRUE, 
+         shift = c(0, ger_fedstates_end$overlap),
+         overlap = FALSE)
+
+
+# Load necessary library
+library(ggplot2)
+
+# Age of child
+ggplot(data_cleaned, aes(x = Age_in_Years)) +
+  geom_histogram(binwidth = 1, fill = "darkgreen", color = "black") +
+  labs(title = "Age Distribution", x = "Age", y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+# Age distribution of parents
+ggplot() +
+  geom_histogram(data = data_cleaned, aes(x = Age_of_Mother_in_Years, fill = "Mother"), 
+                 alpha = 0.6, bins = 40, color = "black") +
+  geom_histogram(data = data_cleaned, aes(x = Age_of_Father_in_Years, fill = "Father"), 
+                 alpha = 0.6, bins = 40, color = "black") +
+  scale_fill_manual(name = "Parent", 
+                    values = c("Father" = "#D5F1A5", "Mother" = "darkgreen")) +
+  labs(title = "Distribution of Mother's and Father's Age",
+       x = "Age (Years)",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+# Deprivation
+# Creating the bar plot
+ggplot(data9, aes(x = dep_child)) +
+  geom_bar(fill = "darkgreen") +
+  labs(title = "Distribution of Deprivation Status",
+       x = "Deprivation Status",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+# Gender
+# Creating the bar plot
+ggplot(data9, aes(x = Geschlecht_)) +
+  geom_bar(fill = "darkgreen") +
+  labs(title = "Gender Distribution", x = "Gender", y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+# Deprivation dimensions
+# Sample data
+data <- data.frame(
+  Dimension = c("Clothing", "Social and Recreational Activities", "Education and Development", "Nutritional and Basic Needs"),
+  Count = c(2, 5, 2, 3),
+  Labels = c("New (not second-hand) clothes\nTwo pairs of fitting shoes", 
+             "Outdoor toys\nRegular leisure activities\nInvite friends over\nCelebrate birthdays\nAt least one week of vacation", 
+             "Age-appropriate books at home\nPlace for homework/study", 
+             "Three meals a day\nAt least one nutritious meal daily\nFresh fruit daily")
+)
+
+# Create the bar plot
+ggplot(data, aes(x = Count, y = reorder(Dimension, Count))) +
+  geom_col(fill = "darkgreen") +
+  geom_text(aes(label = Labels), hjust = -0.1, vjust = 0, size = 3.5, color = "black", lineheight = 0.9) +
+  labs(title = "Deprivation Dimensions in AID:A Dataset",
+       x = "Number of Items",
+       y = "") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        axis.text.y = element_text(size = 10))
+
+                            
+
